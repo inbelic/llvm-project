@@ -96,6 +96,18 @@ func.func @ceildivs(%n: index, %m: index) -> index {
   return %result : index
 }
 
+// CHECK-LABEL: @ceildivs_fold
+func.func @ceildivs_fold() -> index {
+  %n = index.constant -42
+  %m = index.constant 5
+  %result = index.ceildivs %n, %m
+
+  // CHECK: %[[RESULT:.*]] = spirv.Constant -8
+  // %[[RESULTI:.*] = builtin.unrealized_conversion_cast %[[RESULT]]
+  // return %[[RESULTI]]
+  return %result : index
+}
+
 // CHECK-LABEL: @ceildivu
 // CHECK-SAME: %[[NI:.*]]: index, %[[MI:.*]]: index
 func.func @ceildivu(%n: index, %m: index) -> index {
@@ -112,6 +124,18 @@ func.func @ceildivu(%n: index, %m: index) -> index {
   // CHECK: %[[RESULT:.*]] = spirv.Select %[[CMP]], %[[ZERO]], %[[N_MINUS_ONE_DIV_M_PLUS_ONE]]
   %result = index.ceildivu %n, %m
 
+  // %[[RESULTI:.*] = builtin.unrealized_conversion_cast %[[RESULT]]
+  // return %[[RESULTI]]
+  return %result : index
+}
+
+// CHECK-LABEL: @ceildivu_fold
+func.func @ceildivu_fold() -> index {
+  %n = index.constant -42
+  %m = index.constant 5
+  %result = index.ceildivu %n, %m
+
+  // CHECK: %[[RESULT:.*]] = spirv.Constant 8
   // %[[RESULTI:.*] = builtin.unrealized_conversion_cast %[[RESULT]]
   // return %[[RESULTI]]
   return %result : index
@@ -143,6 +167,18 @@ func.func @floordivs(%n: index, %m: index) -> index {
   // CHECK: %[[RESULT:.*]] = spirv.Select %[[CMP]], %[[POS_RES]], %[[NEG_RES]]
   %result = index.floordivs %n, %m
 
+  // %[[RESULTI:.*] = builtin.unrealized_conversion_cast %[[RESULT]]
+  // return %[[RESULTI]]
+  return %result : index
+}
+
+// CHECK-LABEL: @floordivs_fold
+func.func @floordivs_fold() -> index {
+  %n = index.constant -42
+  %m = index.constant 5
+  %result = index.floordivs %n, %m
+
+  // CHECK: %[[RESULT:.*]] = spirv.Constant -9
   // %[[RESULTI:.*] = builtin.unrealized_conversion_cast %[[RESULT]]
   // return %[[RESULTI]]
   return %result : index
