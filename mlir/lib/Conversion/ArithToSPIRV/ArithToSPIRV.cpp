@@ -116,11 +116,11 @@ static Value getScalarOrVectorConstInt(Type type, uint64_t value,
   if (auto vectorType = dyn_cast<VectorType>(type)) {
     Attribute element = IntegerAttr::get(vectorType.getElementType(), value);
     auto attr = SplatElementsAttr::get(vectorType, element);
-    return builder.create<spirv::ConstantOp>(loc, vectorType, attr);
+    return builder.createOrFold<spirv::ConstantOp>(loc, vectorType, attr);
   }
 
   if (auto intType = dyn_cast<IntegerType>(type))
-    return builder.create<spirv::ConstantOp>(
+    return builder.createOrFold<spirv::ConstantOp>(
         loc, type, builder.getIntegerAttr(type, value));
 
   return nullptr;
@@ -624,16 +624,18 @@ struct ExtSIPattern final : public OpConversionPattern<arith::ExtSIOp> {
       Value shiftSize = getScalarOrVectorConstInt(dstType, dstBW - srcBW,
                                                   rewriter, op.getLoc());
 
+      Location loc = op.getLoc();
       // First shift left to sequeeze out all leading bits beyond the original
       // bitwidth. Here we need to use the original source and result type's
       // bitwidth.
-      auto shiftLOp = rewriter.create<spirv::ShiftLeftLogicalOp>(
-          op.getLoc(), dstType, adaptor.getIn(), shiftSize);
+      auto shiftLOp = rewriter.createOrFold<spirv::ShiftLeftLogicalOp>(
+          loc, dstType, adaptor.getIn(), shiftSize);
 
       // Then we perform arithmetic right shift to make sure we have the right
       // sign bits for negative values.
-      rewriter.replaceOpWithNewOp<spirv::ShiftRightArithmeticOp>(
-          op, dstType, shiftLOp, shiftSize);
+      Value result = rewriter.createOrFold<spirv::ShiftRightArithmeticOp>(
+          loc, dstType, shiftLOp, shiftSize);
+      rewriter.replaceOp(op, result);
     } else {
       rewriter.replaceOpWithNewOp<spirv::SConvertOp>(op, dstType,
                                                      adaptor.getOperands());
@@ -731,13 +733,14 @@ struct TruncII1Pattern final : public OpConversionPattern<arith::TruncIOp> {
     auto srcType = adaptor.getOperands().front().getType();
     // Check if (x & 1) == 1.
     Value mask = spirv::ConstantOp::getOne(srcType, loc, rewriter);
-    Value maskedSrc = rewriter.create<spirv::BitwiseAndOp>(
+    Value maskedSrc = rewriter.createOrFold<spirv::BitwiseAndOp>(
         loc, srcType, adaptor.getOperands()[0], mask);
-    Value isOne = rewriter.create<spirv::IEqualOp>(loc, maskedSrc, mask);
+    Value isOne = rewriter.createOrFold<spirv::IEqualOp>(loc, maskedSrc, mask);
 
     Value zero = spirv::ConstantOp::getZero(dstType, loc, rewriter);
     Value one = spirv::ConstantOp::getOne(dstType, loc, rewriter);
-    rewriter.replaceOpWithNewOp<spirv::SelectOp>(op, dstType, isOne, one, zero);
+    Value result = rewriter.createOrFold<spirv::SelectOp>(loc, dstType, isOne, one, zero);
+    rewriter.replaceOp(op, result);
     return success();
   }
 };

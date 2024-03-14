@@ -1043,6 +1043,16 @@ func.func @sexti4_scalar(%arg0: i4) -> i32 {
   return %0 : i32
 }
 
+// CHECK-LABEL: @sexti4_scalar_fold
+func.func @sexti4_scalar_fold() -> i32 {
+  %val = arith.constant 4 : i8
+  %0 = arith.extsi %val : i8 to i32
+  // CHECK: %[[_:.+]] = spirv.Constant 4 : i32
+  // CHECK: %[[RES:.+]] = spirv.Constant 4 : i32
+  // CHECK: return %[[RES]] : i32
+  return %0 : i32
+}
+
 // CHECK-LABEL: @sexti4_vector
 func.func @sexti4_vector(%arg0: vector<4xi4>) -> vector<4xi32> {
   // CHECK: %[[INPUT:.+]] = builtin.unrealized_conversion_cast %arg0 : vector<4xi4> to vector<4xi32>
