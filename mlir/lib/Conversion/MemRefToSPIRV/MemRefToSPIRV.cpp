@@ -111,9 +111,9 @@ static Value shiftValue(Location loc, Value value, Value offset, Value mask,
           loc, builder.getIntegerType(targetBits), value);
     }
 
-    value = builder.create<spirv::BitwiseAndOp>(loc, value, mask);
+    value = builder.createOrFold<spirv::BitwiseAndOp>(loc, value, mask);
   }
-  return builder.create<spirv::ShiftLeftLogicalOp>(loc, value.getType(), value,
+  return builder.createOrFold<spirv::ShiftLeftLogicalOp>(loc, value.getType(), value,
                                                    offset);
 }
 
@@ -165,7 +165,7 @@ static Value castIntNToBool(Location loc, Value srcInt, OpBuilder &builder) {
     return srcInt;
 
   auto one = spirv::ConstantOp::getOne(srcInt.getType(), loc, builder);
-  return builder.create<spirv::IEqualOp>(loc, srcInt, one);
+  return builder.createOrFold<spirv::IEqualOp>(loc, srcInt, one);
 }
 
 //===----------------------------------------------------------------------===//
@@ -744,11 +744,11 @@ IntStoreOpPattern::matchAndRewrite(memref::StoreOp storeOp, OpAdaptor adaptor,
 
   // Create a mask to clear the destination. E.g., if it is the second i8 in
   // i32, 0xFFFF00FF is created.
-  Value mask = rewriter.create<spirv::ConstantOp>(
+  Value mask = rewriter.createOrFold<spirv::ConstantOp>(
       loc, dstType, rewriter.getIntegerAttr(dstType, (1 << srcBits) - 1));
   Value clearBitsMask =
-      rewriter.create<spirv::ShiftLeftLogicalOp>(loc, dstType, mask, offset);
-  clearBitsMask = rewriter.create<spirv::NotOp>(loc, dstType, clearBitsMask);
+      rewriter.createOrFold<spirv::ShiftLeftLogicalOp>(loc, dstType, mask, offset);
+  clearBitsMask = rewriter.createOrFold<spirv::NotOp>(loc, dstType, clearBitsMask);
 
   Value storeVal = shiftValue(loc, adaptor.getValue(), offset, mask, rewriter);
   Value adjustedPtr = adjustAccessChainForBitwidth(typeConverter, accessChainOp,
@@ -910,7 +910,7 @@ LogicalResult ReinterpretCastPattern::matchAndRewrite(
 
     int64_t attrVal = cast<IntegerAttr>(offset.get<Attribute>()).getInt();
     Attribute attr = rewriter.getIntegerAttr(intType, attrVal);
-    return rewriter.create<spirv::ConstantOp>(loc, intType, attr);
+    return rewriter.createOrFold<spirv::ConstantOp>(loc, intType, attr);
   }();
 
   rewriter.replaceOpWithNewOp<spirv::InBoundsPtrAccessChainOp>(
