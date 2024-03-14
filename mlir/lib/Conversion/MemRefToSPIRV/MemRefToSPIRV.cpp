@@ -91,7 +91,7 @@ static Value castBoolToIntN(Location loc, Value srcBool, Type dstType,
     return srcBool;
   Value zero = spirv::ConstantOp::getZero(dstType, loc, builder);
   Value one = spirv::ConstantOp::getOne(dstType, loc, builder);
-  return builder.create<spirv::SelectOp>(loc, dstType, srcBool, one, zero);
+  return builder.createOrFold<spirv::SelectOp>(loc, dstType, srcBool, one, zero);
 }
 
 /// Returns the `targetBits`-bit value shifted by the given `offset`, and cast
