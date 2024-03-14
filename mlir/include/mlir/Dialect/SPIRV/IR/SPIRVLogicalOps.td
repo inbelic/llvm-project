@@ -720,6 +720,8 @@ def SPIRV_SLessThanOp : SPIRV_LogicalBinaryOp<"SLessThan",
 
     ```
   }];
+
+  let hasFolder = 1;
 }
 
 // -----
@@ -749,6 +751,8 @@ def SPIRV_SLessThanEqualOp : SPIRV_LogicalBinaryOp<"SLessThanEqual",
     %5 = spirv.SLessThanEqual %2, %3 : vector<4xi32>
     ```
   }];
+
+  let hasFolder = 1;
 }
 
 // -----
@@ -892,6 +896,8 @@ def SPIRV_ULessThanOp : SPIRV_LogicalBinaryOp<"ULessThan",
     %5 = spirv.ULessThan %2, %3 : vector<4xi32>
     ```
   }];
+
+  let hasFolder = 1;
 }
 
 // -----
@@ -955,6 +961,8 @@ def SPIRV_ULessThanEqualOp : SPIRV_LogicalBinaryOp<"ULessThanEqual",
     %5 = spirv.ULessThanEqual %2, %3 : vector<4xi32>
     ```
   }];
+
+  let hasFolder = 1;
 }
 
 #endif // MLIR_DIALECT_SPIRV_IR_LOGICAL_OPS
