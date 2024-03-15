@@ -436,6 +436,11 @@ OpFoldResult spirv::ConstantOp::fold(FoldAdaptor /*adaptor*/) {
 //===----------------------------------------------------------------------===//
 
 OpFoldResult spirv::IAddOp::fold(FoldAdaptor adaptor) {
+  getOperand1().print(llvm::errs());
+  llvm::errs() << "\n";
+  getOperand2().print(llvm::errs());
+  llvm::errs() << "\n\n";
+
   // x + 0 = x
   if (matchPattern(getOperand2(), m_Zero()))
     return getOperand1();
@@ -455,6 +460,11 @@ OpFoldResult spirv::IAddOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 OpFoldResult spirv::IMulOp::fold(FoldAdaptor adaptor) {
+  getOperand1().print(llvm::errs());
+  llvm::errs() << "\n";
+  getOperand2().print(llvm::errs());
+  llvm::errs() << "\n\n";
+
   // x * 0 == 0
   if (matchPattern(getOperand2(), m_Zero()))
     return getOperand2();
