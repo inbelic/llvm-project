@@ -1652,6 +1652,10 @@ llvm::MDNode *ModuleTranslation::getTBAANode(TBAATagAttr tbaaAttr) const {
   return tbaaMetadataMapping.lookup(tbaaAttr);
 }
 
+llvm::MDNode *ModuleTranslation::getTBAAStructNode(TBAAStructTagAttr tbaaAttr) const {
+  return tbaaMetadataMapping.lookup(tbaaAttr);
+}
+
 void ModuleTranslation::setTBAAMetadata(AliasAnalysisOpInterface op,
                                         llvm::Instruction *inst) {
   ArrayAttr tagRefs = op.getTBAATagsOrNull();
@@ -1670,6 +1674,16 @@ void ModuleTranslation::setTBAAMetadata(AliasAnalysisOpInterface op,
 
   llvm::MDNode *node = getTBAANode(cast<TBAATagAttr>(tagRefs[0]));
   inst->setMetadata(llvm::LLVMContext::MD_tbaa, node);
+}
+
+void ModuleTranslation::setTBAAStructMetadata(TBAAStructOpInterface op,
+                                              llvm::Instruction *inst) {
+  TBAAStructTagAttr tbaaStructRef = op.getTBAAStructTagOrNull();
+  if (!tbaaStructRef)
+    return;
+
+  llvm::MDNode *node = getTBAAStructNode(tbaaStructRef);
+  inst->setMetadata(llvm::LLVMContext::MD_tbaa_struct, node);
 }
 
 void ModuleTranslation::setBranchWeightsMetadata(BranchWeightOpInterface op) {
@@ -1730,8 +1744,27 @@ LogicalResult ModuleTranslation::createTBAAMetadata() {
     tbaaMetadataMapping.insert({tag, llvm::MDNode::get(ctx, operands)});
   });
 
+  walker.addWalk([&](TBAAStructTagAttr tbaaStruct) {
+    SmallVector<llvm::Metadata *> operands;
+
+    for (TBAAStructMemberAttr member : tbaaStruct.getMembers()) {
+      operands.push_back(llvm::ConstantAsMetadata::get(
+          llvm::ConstantInt::get(offsetTy, member.getOffset())));
+      operands.push_back(llvm::ConstantAsMetadata::get(
+          llvm::ConstantInt::get(offsetTy, member.getSize())));
+      operands.push_back(tbaaMetadataMapping.lookup(member.getTag()));
+    }
+
+    tbaaMetadataMapping.insert({tbaaStruct, llvm::MDNode::get(ctx, operands)});
+  });
+
   mlirModule->walk([&](AliasAnalysisOpInterface analysisOpInterface) {
     if (auto attr = analysisOpInterface.getTBAATagsOrNull())
+      walker.walk(attr);
+  });
+
+  mlirModule->walk([&](TBAAStructOpInterface tbaaStructOpInterface) {
+    if (auto attr = tbaaStructOpInterface.getTBAAStructTagOrNull())
       walker.walk(attr);
   });
 

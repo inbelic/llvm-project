@@ -167,7 +167,8 @@ def LLVM_SMinOp : LLVM_BinarySameArgsIntrOpI<"smin">;
 def LLVM_UMaxOp : LLVM_BinarySameArgsIntrOpI<"umax">;
 def LLVM_UMinOp : LLVM_BinarySameArgsIntrOpI<"umin">;
 
-class LLVM_MemcpyIntrOpBase<string name, list<Trait> traits = []> :
+class LLVM_MemcpyIntrOpBase<string name, list<Trait> traits = [],
+                            bit requiresTBAAStruct = 0> :
     LLVM_ZeroResultIntrOp<name, [0, 1, 2],
     !listconcat(traits, [
       DeclareOpInterfaceMethods<PromotableMemOpInterface>,
@@ -175,7 +176,8 @@ class LLVM_MemcpyIntrOpBase<string name, list<Trait> traits = []> :
       DeclareOpInterfaceMethods<SafeMemorySlotAccessOpInterface>
     ]),
     /*requiresAccessGroup=*/1, /*requiresAliasAnalysis=*/1,
-    /*immArgPositions=*/[3], /*immArgAttrNames=*/["isVolatile"]> {
+    /*immArgPositions=*/[3], /*immArgAttrNames=*/["isVolatile"],
+    requiresTBAAStruct> {
   dag args = (ins Arg<LLVM_AnyPointer,"",[MemWrite]>:$dst,
                   Arg<LLVM_AnyPointer,"",[MemRead]>:$src,
                   AnySignlessInteger:$len, I1Attr:$isVolatile);
@@ -197,7 +199,8 @@ class LLVM_MemcpyIntrOpBase<string name, list<Trait> traits = []> :
 }
 
 def LLVM_MemcpyOp : LLVM_MemcpyIntrOpBase<"memcpy",
-    [DeclareOpInterfaceMethods<TBAAStructOpInterface>]>
+    [DeclareOpInterfaceMethods<TBAAStructOpInterface>],
+    /*requiresTBAAStruct =*/1> {
   dag struct_arg = (ins OptionalAttr<LLVM_TBAAStructTagAttr>:$tbaa_struct);
   let arguments = !con(!con(args, aliasAttrs), struct_arg);
 

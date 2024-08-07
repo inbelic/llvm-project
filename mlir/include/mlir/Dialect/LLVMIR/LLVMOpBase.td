@@ -236,6 +236,9 @@ class LLVM_MemOpPatterns {
     moduleTranslation.setAliasScopeMetadata(op, inst);
     moduleTranslation.setTBAAMetadata(op, inst);
   }];
+  code setTBAAStructMetadataCode = [{
+    moduleTranslation.setTBAAStructMetadata(op, inst);
+  }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -293,7 +296,8 @@ class LLVM_IntrOpBase<Dialect dialect, string opName, string enumName,
                       bit requiresAccessGroup = 0, bit requiresAliasAnalysis = 0,
                       bit requiresFastmath = 0,
                       list<int> immArgPositions = [],
-                      list<string> immArgAttrNames = []>
+                      list<string> immArgAttrNames = [],
+                      bit requiresTBAAStruct = 0>
     : LLVM_OpBase<dialect, opName, !listconcat(
         !if(!gt(requiresAccessGroup, 0),
             [DeclareOpInterfaceMethods<AccessGroupOpInterface>], []),
@@ -327,6 +331,7 @@ class LLVM_IntrOpBase<Dialect dialect, string opName, string enumName,
     (void) inst;
     }] # !if(!gt(requiresAccessGroup, 0), setAccessGroupsMetadataCode, "")
        # !if(!gt(requiresAliasAnalysis, 0), setAliasAnalysisMetadataCode, "")
+       # !if(!gt(requiresTBAAStruct, 0), setTBAAStructMetadataCode, "")
        # !if(!gt(numResults, 0), "$res = inst;", "");
 
   string mlirBuilder = [{
@@ -357,11 +362,13 @@ class LLVM_IntrOp<string mnem, list<int> overloadedResults,
                   int numResults, bit requiresAccessGroup = 0,
                   bit requiresAliasAnalysis = 0, bit requiresFastmath = 0,
                   list<int> immArgPositions = [],
-                  list<string> immArgAttrNames = []>
+                  list<string> immArgAttrNames = [],
+                  bit requiresTBAAStruct = 0>
     : LLVM_IntrOpBase<LLVM_Dialect, "intr." # mnem, !subst(".", "_", mnem),
                       overloadedResults, overloadedOperands, traits,
                       numResults, requiresAccessGroup, requiresAliasAnalysis,
-                      requiresFastmath, immArgPositions, immArgAttrNames>;
+                      requiresFastmath, immArgPositions, immArgAttrNames,
+                      requiresTBAAStruct>;
 
 // Base class for LLVM intrinsic operations returning no results. Places the
 // intrinsic into the LLVM dialect and prefixes its name with "intr.".
@@ -382,10 +389,12 @@ class LLVM_ZeroResultIntrOp<string mnem, list<int> overloadedOperands = [],
                             bit requiresAccessGroup = 0,
                             bit requiresAliasAnalysis = 0,
                             list<int> immArgPositions = [],
-                            list<string> immArgAttrNames = []>
+                            list<string> immArgAttrNames = [],
+                            bit requiresTBAAStruct = 0>
     : LLVM_IntrOp<mnem, [], overloadedOperands, traits, /*numResults=*/0,
                   requiresAccessGroup, requiresAliasAnalysis,
-                  /*requiresFastMath=*/0, immArgPositions, immArgAttrNames>;
+                  /*requiresFastMath=*/0, immArgPositions, immArgAttrNames,
+                  requiresTBAAStruct>;
 
 // Base class for LLVM intrinsic operations returning one result. Places the
 // intrinsic into the LLVM dialect and prefixes its name with "intr.". This is

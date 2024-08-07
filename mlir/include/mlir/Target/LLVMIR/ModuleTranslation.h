@@ -160,6 +160,9 @@ public:
   /// Sets LLVM TBAA metadata for memory operations that have TBAA attributes.
   void setTBAAMetadata(AliasAnalysisOpInterface op, llvm::Instruction *inst);
 
+  /// Sets LLVM TBAA metadata for memory operations that have TBAA attributes.
+  void setTBAAStructMetadata(TBAAStructOpInterface op, llvm::Instruction *inst);
+
   /// Sets LLVM profiling metadata for operations that have branch weights.
   void setBranchWeightsMetadata(BranchWeightOpInterface op);
 
@@ -324,6 +327,10 @@ private:
   /// Returns the LLVM metadata corresponding to the given mlir LLVM dialect
   /// TBAATagAttr.
   llvm::MDNode *getTBAANode(TBAATagAttr tbaaAttr) const;
+
+  /// Returns the LLVM metadata corresponding to the given mlir LLVM dialect
+  /// TBAAStructTagAttr.
+  llvm::MDNode *getTBAAStructNode(TBAAStructTagAttr tbaaAttr) const;
 
   /// Process tbaa LLVM Metadata operations and create LLVM
   /// metadata nodes for them.
