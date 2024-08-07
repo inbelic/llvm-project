@@ -323,6 +323,50 @@ LogicalResult ModuleImport::processTBAAMetadata(const llvm::MDNode *node) {
     return true;
   };
 
+  // If `node` looks like a TBAA struct metadata,
+  // then return true, if it is a valid node, and false otherwise.
+  // If it does not look like a TBAA struct metadata, then return std::nullopt.
+  // If the tag argument is non-null, then it will contain the converted
+  // TBAA tag metadata operand for a valid TBAA node (i.e. when true is
+  // returned).
+  auto isStructNode = [&](const llvm::MDNode *node,
+      SmallVector<TBAAStructMemberAttr> *memberAttrs) -> std::optional<bool> {
+
+    // Ensure we have groups of 3
+    unsigned numOperands = node->getNumOperands();
+    if (numOperands % 3 != 0)
+      return std::nullopt;
+
+    unsigned numMembers = numOperands / 3;
+    for (unsigned memberIdx = 0; memberIdx < numMembers; memberIdx++) {
+      unsigned index = memberIdx * 3;
+
+      // Extract in the format {offset : int, size : int, tag : TBAATagAttr}
+      auto *offsetCI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(
+          node->getOperand(index++));
+      auto *sizeCI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(
+          node->getOperand(index++));
+      const auto *tagNode = dyn_cast<const llvm::MDNode>(
+          node->getOperand(index++));
+      if (!offsetCI || !sizeCI || !tagNode) {
+        return std::nullopt;
+      }
+
+      if (auto tagAttr = llvm::dyn_cast<TBAATagAttr>(tbaaMapping.lookup(tagNode))) {
+        memberAttrs->push_back(
+           builder.getAttr<TBAAStructMemberAttr>(
+             offsetCI->getZExtValue(), sizeCI->getZExtValue(),
+             tagAttr));
+      } else {
+        emitError(loc) << "operand '" << index << "' must be a valid existing tag: "
+                       << diagMD(node, llvmModule.get());
+        return false;
+      }
+
+    }
+    return true;
+  };
+
   // Do a post-order walk over the TBAA Graph. Since a correct TBAA Graph is a
   // DAG, a post-order walk guarantees that we convert any metadata node we
   // depend on, prior to converting the current node.
@@ -395,6 +439,14 @@ LogicalResult ModuleImport::processTBAAMetadata(const llvm::MDNode *node) {
       tbaaMapping.insert(
           {current, builder.getAttr<TBAATagAttr>(baseAttr, accessAttr, offset,
                                                  isConstant)});
+      continue;
+    }
+
+    SmallVector<TBAAStructMemberAttr> memberAttrs;
+    if (std::optional<bool> isValid = isStructNode(current, &memberAttrs)) {
+      assert(isValid.value() && "tbaa struct node must be valid");
+      tbaaMapping.insert(
+          {node, builder.getAttr<TBAAStructTagAttr>(ArrayRef(memberAttrs))});
       continue;
     }
 
@@ -535,6 +587,9 @@ LogicalResult ModuleImport::convertMetadata() {
           return failure();
       if (aliasAnalysisNodes.NoAlias)
         if (failed(processAliasScopeMetadata(aliasAnalysisNodes.NoAlias)))
+          return failure();
+      if (aliasAnalysisNodes.TBAAStruct)
+        if (failed(processTBAAMetadata(aliasAnalysisNodes.TBAAStruct)))
           return failure();
     }
   }

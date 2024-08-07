@@ -74,7 +74,8 @@ static ArrayRef<unsigned> getSupportedMetadataImpl() {
   static const SmallVector<unsigned> convertibleMetadata = {
       llvm::LLVMContext::MD_prof,         llvm::LLVMContext::MD_tbaa,
       llvm::LLVMContext::MD_access_group, llvm::LLVMContext::MD_loop,
-      llvm::LLVMContext::MD_noalias,      llvm::LLVMContext::MD_alias_scope};
+      llvm::LLVMContext::MD_noalias,      llvm::LLVMContext::MD_alias_scope,
+      llvm::LLVMContext::MD_tbaa_struct};
   return convertibleMetadata;
 }
 
@@ -226,6 +227,25 @@ static LogicalResult setNoaliasScopesAttr(const llvm::MDNode *node,
   return success();
 }
 
+/// Searches for the attribute that maps to the given TBAA struct metadata
+/// `node` and attaches it to the imported operation if the lookup succeeds.
+/// Returns failure otherwise.
+static LogicalResult setTBAAStructAttr(const llvm::MDNode *node, Operation *op,
+                                       LLVM::ModuleImport &moduleImport) {
+  Attribute tbaaStructSym = moduleImport.lookupTBAAAttr(node);
+  if (!tbaaStructSym)
+    return failure();
+
+  auto iface = dyn_cast<TBAAStructOpInterface>(op);
+  if (!iface)
+    return failure();
+
+  if (auto tbaaStructAttr = llvm::dyn_cast<TBAAStructTagAttr>(tbaaStructSym)) {
+    iface.setTBAAStructTag(tbaaStructAttr);
+    return success();
+  }
+  return failure();
+}
 namespace {
 
 /// Implementation of the dialect interface that converts operations belonging
@@ -260,6 +280,8 @@ public:
       return setAliasScopesAttr(node, op, moduleImport);
     if (kind == llvm::LLVMContext::MD_noalias)
       return setNoaliasScopesAttr(node, op, moduleImport);
+    if (kind == llvm::LLVMContext::MD_tbaa_struct)
+      return setTBAAStructAttr(node, op, moduleImport);
 
     // A handler for a supported metadata kind is missing.
     llvm_unreachable("unknown metadata type");
