@@ -249,6 +249,43 @@ def AliasAnalysisOpInterface : OpInterface<"AliasAnalysisOpInterface"> {
   ];
 }
 
+def TBAAStructOpInterface : OpInterface<"TBAAStructOpInterface"> {
+  let description = [{
+    An interface for memory operations that can carry TBAA struct information.
+    It provides setters and getters for the operation's TBAA struct
+    attribute. The default implementations of the interface methods expect
+    the operation to have an attribute of type TBAAStructTag named tbaa_struct.
+  }];
+
+  let cppNamespace = "::mlir::LLVM";
+
+  let methods = [
+    InterfaceMethod<
+       /*desc=*/        "Returns the tbaa_struct attribute or nullptr",
+       /*returnType=*/  "TBAAStructTagAttr",
+       /*methodName=*/  "getTBAAStructTagOrNull",
+       /*args=*/        (ins),
+       /*methodBody=*/  [{}],
+       /*defaultImpl=*/ [{
+         auto op = cast<ConcreteOp>(this->getOperation());
+         return op.getTbaaStructAttr();
+       }]
+       >,
+     InterfaceMethod<
+       /*desc=*/        "Sets the tbaa_struct attribute",
+       /*returnType=*/  "void",
+       /*methodName=*/  "setTBAAStructTag",
+       /*args=*/        (ins "const TBAAStructTagAttr":$attr),
+       /*methodBody=*/  [{}],
+       /*defaultImpl=*/ [{
+         auto op = cast<ConcreteOp>(this->getOperation());
+         op.setTbaaStructAttr(attr);
+       }]
+       >
+  ];
+}
+
+
 def GetResultPtrElementType : OpInterface<"GetResultPtrElementType"> {
   let description = [{
     An interface for operations that yield an LLVMPointer. Allows the
