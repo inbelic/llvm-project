@@ -1652,7 +1652,8 @@ llvm::MDNode *ModuleTranslation::getTBAANode(TBAATagAttr tbaaAttr) const {
   return tbaaMetadataMapping.lookup(tbaaAttr);
 }
 
-llvm::MDNode *ModuleTranslation::getTBAAStructNode(TBAAStructTagAttr tbaaAttr) const {
+llvm::MDNode *
+ModuleTranslation::getTBAAStructNode(TBAAStructTagAttr tbaaAttr) const {
   return tbaaMetadataMapping.lookup(tbaaAttr);
 }
 

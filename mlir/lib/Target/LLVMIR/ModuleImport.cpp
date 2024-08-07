@@ -330,8 +330,8 @@ LogicalResult ModuleImport::processTBAAMetadata(const llvm::MDNode *node) {
   // TBAA tag metadata operand for a valid TBAA node (i.e. when true is
   // returned).
   auto isStructNode = [&](const llvm::MDNode *node,
-      SmallVector<TBAAStructMemberAttr> *memberAttrs) -> std::optional<bool> {
-
+                          SmallVector<TBAAStructMemberAttr> *memberAttrs)
+      -> std::optional<bool> {
     // Ensure we have groups of 3
     unsigned numOperands = node->getNumOperands();
     if (numOperands % 3 != 0)
@@ -346,23 +346,22 @@ LogicalResult ModuleImport::processTBAAMetadata(const llvm::MDNode *node) {
           node->getOperand(index++));
       auto *sizeCI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(
           node->getOperand(index++));
-      const auto *tagNode = dyn_cast<const llvm::MDNode>(
-          node->getOperand(index++));
+      const auto *tagNode =
+          dyn_cast<const llvm::MDNode>(node->getOperand(index++));
       if (!offsetCI || !sizeCI || !tagNode) {
         return std::nullopt;
       }
 
-      if (auto tagAttr = llvm::dyn_cast<TBAATagAttr>(tbaaMapping.lookup(tagNode))) {
-        memberAttrs->push_back(
-           builder.getAttr<TBAAStructMemberAttr>(
-             offsetCI->getZExtValue(), sizeCI->getZExtValue(),
-             tagAttr));
+      if (auto tagAttr =
+              llvm::dyn_cast<TBAATagAttr>(tbaaMapping.lookup(tagNode))) {
+        memberAttrs->push_back(builder.getAttr<TBAAStructMemberAttr>(
+            offsetCI->getZExtValue(), sizeCI->getZExtValue(), tagAttr));
       } else {
-        emitError(loc) << "operand '" << index << "' must be a valid existing tag: "
+        emitError(loc) << "operand '" << index
+                       << "' must be a valid existing tag: "
                        << diagMD(node, llvmModule.get());
         return false;
       }
-
     }
     return true;
   };
