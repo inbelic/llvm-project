@@ -167,11 +167,13 @@ def LLVM_SMinOp : LLVM_BinarySameArgsIntrOpI<"smin">;
 def LLVM_UMaxOp : LLVM_BinarySameArgsIntrOpI<"umax">;
 def LLVM_UMinOp : LLVM_BinarySameArgsIntrOpI<"umin">;
 
-class LLVM_MemcpyIntrOpBase<string name> :
+class LLVM_MemcpyIntrOpBase<string name, list<Trait> traits = []> :
     LLVM_ZeroResultIntrOp<name, [0, 1, 2],
-    [DeclareOpInterfaceMethods<PromotableMemOpInterface>,
-     DeclareOpInterfaceMethods<DestructurableAccessorOpInterface>,
-     DeclareOpInterfaceMethods<SafeMemorySlotAccessOpInterface>],
+    !listconcat(traits, [
+      DeclareOpInterfaceMethods<PromotableMemOpInterface>,
+      DeclareOpInterfaceMethods<DestructurableAccessorOpInterface>,
+      DeclareOpInterfaceMethods<SafeMemorySlotAccessOpInterface>
+    ]),
     /*requiresAccessGroup=*/1, /*requiresAliasAnalysis=*/1,
     /*immArgPositions=*/[3], /*immArgAttrNames=*/["isVolatile"]> {
   dag args = (ins Arg<LLVM_AnyPointer,"",[MemWrite]>:$dst,
@@ -194,7 +196,29 @@ class LLVM_MemcpyIntrOpBase<string name> :
   ];
 }
 
-def LLVM_MemcpyOp : LLVM_MemcpyIntrOpBase<"memcpy">;
+def LLVM_MemcpyOp : LLVM_MemcpyIntrOpBase<"memcpy",
+    [DeclareOpInterfaceMethods<TBAAStructOpInterface>]>
+  dag struct_arg = (ins OptionalAttr<LLVM_TBAAStructTagAttr>:$tbaa_struct);
+  let arguments = !con(!con(args, aliasAttrs), struct_arg);
+
+  let builders = [
+    OpBuilder<(ins "Value":$dst, "Value":$src, "Value":$len,
+                   "bool":$isVolatile,
+                   CArg<"TBAAStructTagAttr", "nullptr">:$tbaa_struct), [{
+      build($_builder, $_state, dst, src, len,
+            $_builder.getBoolAttr(isVolatile), tbaa_struct);
+    }]>,
+    OpBuilder<(ins "Value":$dst, "Value":$src, "Value":$len,
+                   "IntegerAttr":$isVolatile,
+                   "TBAAStructTagAttr":$tbaa_struct), [{
+      build($_builder, $_state, dst, src, len, isVolatile,
+            /*access_groups=*/nullptr, /*alias_scopes=*/nullptr,
+            /*noalias_scopes=*/nullptr, /*tbaa=*/nullptr,
+            tbaa_struct);
+    }]>
+  ];
+}
+
 def LLVM_MemmoveOp : LLVM_MemcpyIntrOpBase<"memmove">;
 
 def LLVM_MemcpyInlineOp :
