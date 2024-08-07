@@ -984,6 +984,71 @@ def LLVM_TBAATagArrayAttr
 }
 
 //===----------------------------------------------------------------------===//
+// TBAAStructTagAttr
+//===----------------------------------------------------------------------===//
+def LLVM_TBAAStructMemberAttr : LLVM_Attr<"TBAAStructMember", "tbaa_struct_member"> {
+  let parameters = (ins
+    "int64_t":$offset,
+    "int64_t":$size,
+    "TBAATagAttr":$tag
+  );
+
+  let builders = [
+    AttrBuilderWithInferredContext<(ins "int64_t":$offset,
+                                        "int64_t":$size,
+                                        "TBAATagAttr":$tag), [{
+      return $_get(tag.getContext(), offset, size, tag);
+    }]>
+  ];
+
+  let assemblyFormat = "`<` params `>`";
+}
+
+def LLVM_TBAAStructMemberAttrArray : ArrayRefParameter<"TBAAStructMemberAttr"> {
+  let printer = [{
+    $_printer << '{';
+    llvm::interleaveComma($_self, $_printer, [&](TBAAStructMemberAttr attr) {
+        $_printer.printStrippedAttrOrType(attr);
+    });
+    $_printer << '}';
+  }];
+
+  let parser = [{
+    [&]() -> FailureOr<SmallVector<TBAAStructMemberAttr>> {
+        using Result = SmallVector<TBAAStructMemberAttr>;
+        if ($_parser.parseLBrace())
+            return failure();
+        FailureOr<Result> result = FieldParser<Result>::parse($_parser);
+        if (failed(result))
+            return failure();
+        if ($_parser.parseRBrace())
+            return failure();
+        return result;
+    }()
+  }];
+}
+
+def LLVM_TBAAStructTagAttr : LLVM_Attr<"TBAAStructTag", "tbaa_struct_tag"> {
+  let parameters = (ins LLVM_TBAAStructMemberAttrArray:$members);
+
+  let summary = "LLVM dialect TBAA struct metadata";
+  let description = [{
+    Describes which memory subregions in a memcpy are padded and what the TBAA
+    tags of the struct are.
+
+    Example:
+    ```mlir
+    #tbaa_struct = #llvm.tbaa_struct_tag<members={<offset, size, tag>, <offset, size, tag>, ... }>
+    ```
+
+    See the following link for more details:
+    https://llvm.org/docs/LangRef.html#tbaa-struct-metadata
+  }];
+
+  let assemblyFormat = "`<` struct(params) `>`";
+}
+
+//===----------------------------------------------------------------------===//
 // VScaleRangeAttr
 //===----------------------------------------------------------------------===//
 
