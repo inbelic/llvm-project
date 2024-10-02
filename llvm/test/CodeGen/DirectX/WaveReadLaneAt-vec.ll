@@ -1,4 +1,4 @@
-; RUN: opt -S  -scalarizer -dxil-op-lower -mtriple=dxil-pc-shadermodel6.3-compute %s | FileCheck %s
+; RUN: opt -S -scalarizer -mtriple=dxil-pc-shadermodel6.3-compute %s | FileCheck %s
 
 define noundef <4 x half> @wave_rla_halfv4(<4 x half> noundef %expr, i32 noundef %idx) #0 {
 entry:

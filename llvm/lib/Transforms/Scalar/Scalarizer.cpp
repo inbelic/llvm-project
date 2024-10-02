@@ -33,6 +33,7 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsDirectX.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
@@ -704,6 +705,35 @@ bool ScalarizerVisitor::isTriviallyScalarizable(Intrinsic::ID ID) {
          TTI->isTargetIntrinsicTriviallyScalarizable(ID);
 }
 
+// This simply wraps a call to ifVectorIntrinsicWithScalarOpAtArg to allow
+// for specifications of ops that are not available in VectorUtils.cpp
+static bool checkIfVectorIntrinsicWithScalarOpAtArg(Intrinsic::ID ID, unsigned ScalarOpIdx) {
+  switch (ID) {
+  case Intrinsic::dx_wave_read_lane_at:
+    return (ScalarOpIdx == 1);
+  default:
+    return isVectorIntrinsicWithScalarOpAtArg(ID, ScalarOpIdx);
+  }
+}
+
+// This simply wraps a call to ifVectorIntrinsicWithOverloadTypeAtArg to allow
+// for specifications of ops that are not available in VectorUtils.cpp
+static bool checkIfVectorIntrinsicWithOverloadTypeAtArg(Intrinsic::ID ID, unsigned ScalarOpIdx) {
+  switch (ID) {
+  default:
+    return isVectorIntrinsicWithOverloadTypeAtArg(ID, ScalarOpIdx);
+  }
+}
+
+static bool checkIfScalarOpTypeAtArg(Intrinsic::ID ID, unsigned ScalarOpIdx) {
+  switch (ID) {
+  case Intrinsic::dx_wave_read_lane_at:
+    return (ScalarOpIdx == 1);
+  default:
+    return false;
+  }
+}
+
 /// If a call to a vector typed intrinsic function, split into a scalar call per
 /// element if possible for the intrinsic.
 bool ScalarizerVisitor::splitCall(CallInst &CI) {
@@ -729,7 +759,7 @@ bool ScalarizerVisitor::splitCall(CallInst &CI) {
 
   SmallVector<llvm::Type *, 3> Tys;
   // Add return type if intrinsic is overloaded on it.
-  if (isVectorIntrinsicWithOverloadTypeAtArg(ID, -1))
+  if (checkIfVectorIntrinsicWithOverloadTypeAtArg(ID, -1))
     Tys.push_back(VS->SplitTy);
 
   // Assumes that any vector type has the same number of elements as the return
@@ -752,13 +782,14 @@ bool ScalarizerVisitor::splitCall(CallInst &CI) {
       }
 
       Scattered[I] = scatter(&CI, OpI, *OpVS);
-      if (isVectorIntrinsicWithOverloadTypeAtArg(ID, I)) {
+      if (checkIfVectorIntrinsicWithOverloadTypeAtArg(ID, I)) {
         OverloadIdx[I] = Tys.size();
         Tys.push_back(OpVS->SplitTy);
       }
     } else {
       ScalarOperands[I] = OpI;
-      if (isVectorIntrinsicWithOverloadTypeAtArg(ID, I))
+      if (checkIfVectorIntrinsicWithOverloadTypeAtArg(ID, I)
+          || checkIfScalarOpTypeAtArg(ID, I))
         Tys.push_back(OpI->getType());
     }
   }
@@ -778,7 +809,7 @@ bool ScalarizerVisitor::splitCall(CallInst &CI) {
       Tys[0] = VS->RemainderTy;
 
     for (unsigned J = 0; J != NumArgs; ++J) {
-      if (isVectorIntrinsicWithScalarOpAtArg(ID, J)) {
+      if (checkIfVectorIntrinsicWithScalarOpAtArg(ID, J)) {
         ScalarCallOps.push_back(ScalarOperands[J]);
       } else {
         ScalarCallOps.push_back(Scattered[J][I]);
