@@ -4643,6 +4643,26 @@ def Error : InheritableAttr {
   let Documentation = [ErrorAttrDocs];
 }
 
+/// HLSL Root Signature Attribute
+def HLSLRootSignature : Attr {
+  /// [RootSignature(signature)]
+  let Spellings = [Microsoft<"RootSignature">];
+  let Args = [StringArgument<"signature">];
+  let Subjects = SubjectList<[Function],
+                             ErrorDiag, "'function'">;
+  let LangOpts = [HLSL];
+  let Documentation = [InternalOnly]; // TODO: is this actually internal only?
+  let AdditionalMembers = [{
+private:
+  ArrayRef<llvm::hlsl::root_signature::RootElement> RootElements;
+public:
+  void setElements(ArrayRef<llvm::hlsl::root_signature::RootElement> Elements) {
+    RootElements = Elements;
+  }
+  auto getElements() const { return RootElements; }
+}];
+}
+
 def HLSLNumThreads: InheritableAttr {
   let Spellings = [Microsoft<"numthreads">];
   let Args = [IntArgument<"X">, IntArgument<"Y">, IntArgument<"Z">];
