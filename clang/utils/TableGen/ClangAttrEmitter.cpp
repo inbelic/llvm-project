@@ -4943,7 +4943,7 @@ void EmitClangAttrTextNodeDump(const RecordKeeper &Records, raw_ostream &OS) {
 
   for (const auto *Attr : Records.getAllDerivedDefinitions("Attr")) {
     const Record &R = *Attr;
-    if (!R.getValueAsBit("ASTNode"))
+    if (!R.getValueAsBit("ASTNode") || R.getValueAsBit("HasCustomASTDump"))
       continue;
 
     // If the attribute has a semantically-meaningful name (which is determined

@@ -244,6 +244,9 @@ public:
 // Implements Visit methods for Attrs.
 #include "clang/AST/AttrTextNodeDump.inc"
 
+  // Implementations of custom Visit methods for an Attr text dump
+  void VisitHLSLRootSignatureAttr(const HLSLRootSignatureAttr *A);
+
   void VisitNullTemplateArgument(const TemplateArgument &TA);
   void VisitTypeTemplateArgument(const TemplateArgument &TA);
   void VisitDeclarationTemplateArgument(const TemplateArgument &TA);

@@ -673,6 +673,10 @@ class Attr {
   bit TemplateDependent = 0;
   // Set to true for attributes that have a corresponding AST node.
   bit ASTNode = 1;
+  // Set to true if the attribute's TextNodeDumper Visit method requires more
+  // detail than the default provides. Eg) The ASTNode has AdditionalMembers
+  // that should also be dumped.
+  bit HasCustomASTDump = 0;
   // Set to true for attributes which have handler in Sema.
   bit SemaHandler = 1;
   // Set to true if this attribute doesn't need custom handling in Sema.
@@ -4650,6 +4654,7 @@ def HLSLRootSignature : Attr {
   let Args = [StringArgument<"signature">];
   let Subjects = SubjectList<[Function],
                              ErrorDiag, "'function'">;
+  let HasCustomASTDump = 1;
   let LangOpts = [HLSL];
   let Documentation = [InternalOnly]; // TODO: is this actually internal only?
   let AdditionalMembers = [{

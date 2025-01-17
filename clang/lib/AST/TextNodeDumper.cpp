@@ -1137,6 +1137,10 @@ void TextNodeDumper::visitVerbatimLineComment(
   OS << " Text=\"" << C->getText() << "\"";
 }
 
+void TextNodeDumper::VisitHLSLRootSignatureAttr(const HLSLRootSignatureAttr *A) {
+  // Custom implementation of printing the HLSLRootSignature AST node
+}
+
 void TextNodeDumper::VisitNullTemplateArgument(const TemplateArgument &) {
   OS << " null";
 }
