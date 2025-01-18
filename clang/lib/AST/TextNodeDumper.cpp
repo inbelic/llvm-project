@@ -1139,6 +1139,13 @@ void TextNodeDumper::visitVerbatimLineComment(
 
 void TextNodeDumper::VisitHLSLRootSignatureAttr(const HLSLRootSignatureAttr *A) {
   // Custom implementation of printing the HLSLRootSignature AST node
+  OS << " RootSignature=";
+  StringRef Prefix = "";
+  for (const auto Element : A->getElements()) {
+    OS << Prefix;
+    Element.Dump(OS);
+    Prefix = ", ";
+  }
 }
 
 void TextNodeDumper::VisitNullTemplateArgument(const TemplateArgument &) {

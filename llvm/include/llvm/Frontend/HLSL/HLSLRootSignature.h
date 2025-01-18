@@ -18,6 +18,7 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Endian.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 namespace hlsl {
@@ -105,12 +106,18 @@ struct DescriptorTableClause {
       break;
     }
   }
+
+  // Printing for TextNodeDumper
+  void Dump(raw_ostream &OS) const;
 };
 
 // Models the end of a descriptor table and stores its visibility
 struct DescriptorTable {
   ShaderVisibility Visibility = ShaderVisibility::All;
   uint32_t NumClauses = 0; // The number of clauses in the table
+
+  // Printing for TextNodeDumper
+  void Dump(raw_ostream &OS) const;
 };
 
 // Models RootElement : DescriptorTable | DescriptorTableClause
@@ -127,10 +134,15 @@ struct RootElement {
   };
 
   // Constructors
+  RootElement() {} // Used to allocate space on the ASTContext
+
   RootElement(DescriptorTable Table)
       : Tag(ElementType::DescriptorTable), Table(Table) {}
   RootElement(DescriptorTableClause Clause)
       : Tag(ElementType::DescriptorTableClause), Clause(Clause) {}
+
+  // Printing for TextNodeDumper
+  void Dump(raw_ostream &OS) const;
 };
 
 } // namespace root_signature
