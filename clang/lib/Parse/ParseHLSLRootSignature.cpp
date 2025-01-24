@@ -1,5 +1,7 @@
 #include "clang/Parse/ParseHLSLRootSignature.h"
 
+using namespace llvm::hlsl::root_signature;
+
 namespace clang {
 namespace hlsl {
 
@@ -167,6 +169,147 @@ bool RootSignatureLexer::LexToken(RootSignatureToken &Result) {
   Result.Kind = Kind;
   AdvanceBuffer(TokSpelling.size());
   return false;
+}
+
+// Parser Definitions
+
+RootSignatureParser::RootSignatureParser(
+    SmallVector<RootElement> &Elements,
+    const SmallVector<RootSignatureToken> &Tokens, DiagnosticsEngine &Diags)
+    : Elements(Elements), Diags(Diags) {
+  CurTok = Tokens.begin();
+  LastTok = Tokens.end();
+}
+
+bool RootSignatureParser::Parse() {
+  // Handle edge-case of empty RootSignature()
+  if (CurTok == LastTok)
+    return false;
+
+  // Iterate as many RootElements as possible
+  bool HasComma = true;
+  while (HasComma && IsCurExpectedToken(TokenKind::kw_DescriptorTable)) {
+    if (ParseRootElement())
+      return true;
+    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+    if (HasComma)
+      ConsumeNextToken();
+  }
+
+  SourceLocation LastLoc = CurTok->TokLoc;
+  if (HasComma) {
+    // report 'comma' denotes a required extra item
+    Diags.Report(LastLoc, diag::err_hlsl_rootsig_trailing_comma);
+    return true;
+  }
+
+  // Ensure that we are at the end of the tokens
+  CurTok++;
+  if (CurTok != LastTok) {
+    Diags.Report(LastLoc, diag::err_hlsl_rootsig_extra_tokens);
+    return true;
+  }
+  return false;
+}
+
+bool RootSignatureParser::ParseRootElement() {
+  // Dispatch onto the correct parse method
+  switch (CurTok->Kind) {
+  case TokenKind::kw_DescriptorTable:
+    return ParseDescriptorTable();
+  default:
+    llvm_unreachable("Switch for an expected token was not provided");
+    return true;
+  }
+}
+
+bool RootSignatureParser::ParseDescriptorTable() {
+  DescriptorTable Table;
+
+  if (ConsumeExpectedToken(TokenKind::pu_l_paren))
+    return true;
+
+  if (ConsumeExpectedToken(TokenKind::pu_r_paren))
+    return true;
+
+  Elements.push_back(Table);
+  return false;
+}
+
+RootSignatureToken RootSignatureParser::PeekNextToken() {
+  // Create an invalid token
+  RootSignatureToken Token = RootSignatureToken(SourceLocation());
+  if (CurTok != LastTok)
+    Token = *(CurTok + 1);
+  return Token;
+}
+
+bool RootSignatureParser::ConsumeNextToken() {
+  if (CurTok == LastTok) {
+    // Report unexpected end of tokens error
+    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_eof);
+    return true;
+  }
+  CurTok++;
+  return false;
+}
+
+// Is given token one of the expected kinds
+static bool IsExpectedToken(TokenKind Kind, ArrayRef<TokenKind> AnyExpected) {
+  for (auto Expected : AnyExpected)
+    if (Kind == Expected)
+      return true;
+  return false;
+}
+
+bool RootSignatureParser::IsCurExpectedToken(TokenKind Expected) {
+  return IsCurExpectedToken(ArrayRef{Expected});
+}
+
+bool RootSignatureParser::IsCurExpectedToken(ArrayRef<TokenKind> AnyExpected) {
+  return IsExpectedToken(CurTok->Kind, AnyExpected);
+}
+
+bool RootSignatureParser::PeekExpectedToken(TokenKind Expected) {
+  return PeekExpectedToken(ArrayRef{Expected});
+}
+
+bool RootSignatureParser::PeekExpectedToken(ArrayRef<TokenKind> AnyExpected) {
+  RootSignatureToken Token = PeekNextToken();
+  if (Token.Kind == TokenKind::invalid)
+    return true;
+  if (IsExpectedToken(Token.Kind, AnyExpected))
+    return false;
+  return true;
+}
+
+bool RootSignatureParser::ConsumeExpectedToken(TokenKind Expected) {
+  return ConsumeExpectedToken(ArrayRef{Expected});
+}
+
+bool RootSignatureParser::ConsumeExpectedToken(
+    ArrayRef<TokenKind> AnyExpected) {
+  if (ConsumeNextToken())
+    return true;
+  if (IsCurExpectedToken(AnyExpected))
+    return false;
+
+  // Report unexpected token kind error
+  Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_token_kind)
+      << (unsigned)(AnyExpected.size() != 1)
+      << "TODO: implement pretty token kind print";
+  return true;
+}
+
+bool RootSignatureParser::TryConsumeExpectedToken(TokenKind Expected) {
+  return TryConsumeExpectedToken(ArrayRef{Expected});
+}
+
+bool RootSignatureParser::TryConsumeExpectedToken(
+    ArrayRef<TokenKind> AnyExpected) {
+  if (PeekExpectedToken(AnyExpected))
+    return true;
+  return ConsumeNextToken();
 }
 
 } // namespace hlsl

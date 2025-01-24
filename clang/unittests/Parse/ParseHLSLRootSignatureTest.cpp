@@ -24,6 +24,7 @@
 #include "gtest/gtest.h"
 
 using namespace clang;
+using namespace llvm::hlsl::root_signature;
 
 namespace {
 
@@ -276,6 +277,135 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidLexIdentifierTest) {
 
   SmallVector<hlsl::RootSignatureToken> Tokens;
   ASSERT_TRUE(Lexer.Lex(Tokens));
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
+// Valid Parser Tests
+
+TEST_F(ParseHLSLRootSignatureTest, ValidParseEmptyTest) {
+  const llvm::StringLiteral Source = R"cc()cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  // Test no diagnostics produced
+  Consumer->SetNoDiag();
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_FALSE(Parser.Parse());
+  ASSERT_EQ((int)Elements.size(), 0);
+
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
+TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable()
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+
+  // Test no diagnostics produced
+  Consumer->SetNoDiag();
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_FALSE(Parser.Parse());
+  RootElement Elem = Elements[0];
+  // Test generated DescriptorTable start has correct default values
+  ASSERT_TRUE(std::holds_alternative<DescriptorTable>(Elem));
+  ASSERT_EQ(std::get<DescriptorTable>(Elem).NumClauses, (uint32_t)0);
+
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
+// Invalid Parser Tests
+
+TEST_F(ParseHLSLRootSignatureTest, InvalidParseExtraTokenTest) {
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable()
+    space
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  // Test correct diagnostic produced
+  Consumer->SetExpected(diag::err_hlsl_rootsig_extra_tokens);
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_TRUE(Parser.Parse());
+
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
+TEST_F(ParseHLSLRootSignatureTest, InvalidParseUnexpectedTokenTest) {
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable((
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  // Test correct diagnostic produced
+  Consumer->SetExpected(diag::err_hlsl_rootsig_unexpected_token_kind);
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_TRUE(Parser.Parse());
+
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
+TEST_F(ParseHLSLRootSignatureTest, InvalidParseTrailingCommaTest) {
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable(),
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  // Test correct diagnostic produced
+  Consumer->SetExpected(diag::err_hlsl_rootsig_trailing_comma);
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_TRUE(Parser.Parse());
+
   ASSERT_TRUE(Consumer->IsSatisfied());
 }
 

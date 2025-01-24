@@ -15,6 +15,7 @@
 
 #include "clang/AST/APValue.h"
 #include "clang/Basic/DiagnosticLex.h"
+#include "clang/Basic/DiagnosticParse.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Lex/Preprocessor.h"
 
@@ -22,8 +23,12 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 
+#include "llvm/Frontend/HLSL/HLSLRootSignature.h"
+
 namespace clang {
 namespace hlsl {
+
+namespace rs = llvm::hlsl::root_signature;
 
 struct RootSignatureToken {
   enum Kind {
@@ -78,6 +83,71 @@ private:
     Buffer = Buffer.drop_front(NumCharacters);
     SourceLoc = SourceLoc.getLocWithOffset(NumCharacters);
   }
+};
+
+class RootSignatureParser {
+public:
+  RootSignatureParser(SmallVector<rs::RootElement> &Elements,
+                      const SmallVector<RootSignatureToken> &Tokens,
+                      DiagnosticsEngine &Diags);
+
+  // Iterates over the provided tokens and constructs the in-memory
+  // representations of the RootElements.
+  //
+  // The return value denotes if there was a failure and the method will
+  // return on the first encountered failure, or, return false if it
+  // can sucessfully reach the end of the tokens.
+  bool Parse();
+
+private:
+  bool ReportError(unsigned DiagID);
+
+  // Root Element helpers
+  bool ParseRootElement();
+  bool ParseDescriptorTable();
+
+  // Increment the token iterator if we have not reached the end.
+  // Return value denotes if we were already at the last token.
+  bool ConsumeNextToken();
+
+  // Attempt to retrieve the next token, if TokenKind is invalid then there was
+  // no next token.
+  RootSignatureToken PeekNextToken();
+
+  // Is the current token one of the expected kinds
+  bool IsCurExpectedToken(TokenKind AnyExpected);
+  bool IsCurExpectedToken(ArrayRef<TokenKind> AnyExpected);
+
+  // Peek if the next token is of the expected kind.
+  //
+  // Return value denotes if it failed to match the expected kind, either it is
+  // the end of the stream or it didn't match any of the expected kinds.
+  bool PeekExpectedToken(TokenKind Expected);
+  bool PeekExpectedToken(ArrayRef<TokenKind> AnyExpected);
+
+  // Consume the next token and report an error if it is not of the expected
+  // kind.
+  //
+  // Return value denotes if it failed to match the expected kind, either it is
+  // the end of the stream or it didn't match any of the expected kinds.
+  bool ConsumeExpectedToken(TokenKind Expected);
+  bool ConsumeExpectedToken(ArrayRef<TokenKind> AnyExpected);
+
+  // Peek if the next token is of the expected kind and if it is then consume
+  // it.
+  //
+  // Return value denotes if it failed to match the expected kind, either it is
+  // the end of the stream or it didn't match any of the expected kinds. It will
+  // not report an error if there isn't a match.
+  bool TryConsumeExpectedToken(TokenKind Expected);
+  bool TryConsumeExpectedToken(ArrayRef<TokenKind> Expected);
+
+private:
+  SmallVector<rs::RootElement> &Elements;
+  SmallVector<RootSignatureToken>::const_iterator CurTok;
+  SmallVector<RootSignatureToken>::const_iterator LastTok;
+
+  DiagnosticsEngine &Diags;
 };
 
 } // namespace hlsl
