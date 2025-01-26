@@ -308,6 +308,10 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseEmptyTest) {
 TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
   const llvm::StringLiteral Source = R"cc(
     DescriptorTable(
+      CBV(),
+      SRV(),
+      Sampler(),
+      UAV(),
       visibility = SHADER_VISIBILITY_PIXEL
     ),
     DescriptorTable()
@@ -330,11 +334,27 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
 
   ASSERT_FALSE(Parser.Parse());
   RootElement Elem = Elements[0];
-  // Test generated DescriptorTable start has correct values
-  ASSERT_EQ(std::get<DescriptorTable>(Elem).NumClauses, (uint32_t)0);
-  ASSERT_EQ(std::get<DescriptorTable>(Elem).Visibility, ShaderVisibility::Pixel);
+  ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::CBuffer);
 
   Elem = Elements[1];
+  ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::SRV);
+
+  Elem = Elements[2];
+  ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::Sampler);
+
+  Elem = Elements[3];
+  ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::UAV);
+
+  Elem = Elements[4];
+  ASSERT_TRUE(std::holds_alternative<DescriptorTable>(Elem));
+  ASSERT_EQ(std::get<DescriptorTable>(Elem).NumClauses, (uint32_t)4);
+  ASSERT_EQ(std::get<DescriptorTable>(Elem).Visibility, ShaderVisibility::Pixel);
+
+  Elem = Elements[5];
   // Test generated DescriptorTable start has correct default values
   ASSERT_TRUE(std::holds_alternative<DescriptorTable>(Elem));
   ASSERT_EQ(std::get<DescriptorTable>(Elem).NumClauses, (uint32_t)0);

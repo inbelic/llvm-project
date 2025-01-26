@@ -230,6 +230,14 @@ bool RootSignatureParser::ParseDescriptorTable() {
     return true;
 
   bool HasComma = true;
+  while (HasComma &&
+         !TryConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV,
+                                   TokenKind::kw_UAV, TokenKind::kw_Sampler})) {
+    if (ParseDescriptorTableClause())
+      return true;
+    Table.NumClauses++;
+    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+  }
 
   // Consume optional 'visibility' paramater
   if (HasComma && !TryConsumeExpectedToken(TokenKind::kw_visibility)) {

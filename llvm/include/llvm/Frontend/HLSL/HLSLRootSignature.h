@@ -14,6 +14,7 @@
 #ifndef LLVM_FRONTEND_HLSL_HLSLROOTSIGNATURE_H
 #define LLVM_FRONTEND_HLSL_HLSLROOTSIGNATURE_H
 
+#include "llvm/Support/DXILABI.h"
 #include <variant>
 
 namespace llvm {
@@ -39,8 +40,14 @@ struct DescriptorTable {
   uint32_t NumClauses = 0; // The number of clauses in the table
 };
 
+// Models DTClause : CBV | SRV | UAV | Sampler, by collecting like parameters
+using ClauseType = llvm::dxil::ResourceClass;
+struct DescriptorTableClause {
+  ClauseType Type;
+};
+
 // Models RootElement : DescriptorTable
-using RootElement = std::variant<DescriptorTable>;
+using RootElement = std::variant<DescriptorTable, DescriptorTableClause>;
 
 // Models a reference to all non-register parameter types that any RootElement may have
 using ParamType = std::variant<ShaderVisibility *>;

@@ -105,6 +105,7 @@ private:
   // Root Element helpers
   bool ParseRootElement();
   bool ParseDescriptorTable();
+  bool ParseDescriptorTableClause();
 
   // Helper dispatch method
   //
