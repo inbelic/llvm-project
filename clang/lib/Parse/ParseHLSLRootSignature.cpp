@@ -229,11 +229,104 @@ bool RootSignatureParser::ParseDescriptorTable() {
   if (ConsumeExpectedToken(TokenKind::pu_l_paren))
     return true;
 
+  bool HasComma = true;
+
+  // Consume optional 'visibility' paramater
+  if (HasComma && !TryConsumeExpectedToken(TokenKind::kw_visibility)) {
+    if (ParseParam(&Table.Visibility))
+      return true;
+    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+  }
+
+  if (HasComma && Table.NumClauses != 0) {
+    // report 'comma' denotes a required extra item
+    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_trailing_comma);
+    return true;
+  }
+
   if (ConsumeExpectedToken(TokenKind::pu_r_paren))
     return true;
 
   Elements.push_back(Table);
   return false;
+}
+
+bool RootSignatureParser::ParseDescriptorTableClause() {
+  DescriptorTableClause Clause;
+  switch (CurTok->Kind) {
+  case TokenKind::kw_CBV:
+    Clause.Type = ClauseType::CBuffer;
+    break;
+  case TokenKind::kw_SRV:
+    Clause.Type = ClauseType::SRV;
+    break;
+  case TokenKind::kw_UAV:
+    Clause.Type = ClauseType::UAV;
+    break;
+  case TokenKind::kw_Sampler:
+    Clause.Type = ClauseType::Sampler;
+    break;
+  default:
+    llvm_unreachable("Switch for an expected token was not provided");
+    return true;
+  }
+
+  if (ConsumeExpectedToken(TokenKind::pu_l_paren))
+    return true;
+
+  if (ConsumeExpectedToken(TokenKind::pu_r_paren))
+    return true;
+
+  Elements.push_back(Clause);
+  return false;
+}
+
+template<class... Ts>
+struct OverloadedMethods : Ts... { using Ts::operator()...; };
+template<class... Ts>
+OverloadedMethods(Ts...) -> OverloadedMethods<Ts...>;
+
+bool RootSignatureParser::ParseParam(ParamType Ref) {
+  if (ConsumeExpectedToken(TokenKind::pu_equal))
+    return true;
+
+  bool Error;
+  std::visit(OverloadedMethods{
+      [&](ShaderVisibility *Enum) { Error = ParseShaderVisibility(Enum); }
+  }, Ref);
+
+  return Error;
+}
+
+template<typename EnumVal>
+bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumVal> EnumMap, EnumVal *Enum) {
+  SmallVector<TokenKind> EnumToks;
+  for (auto EnumPair : EnumMap)
+    EnumToks.push_back(EnumPair.first);
+
+  // Required mandatory flag argument
+  if (ConsumeExpectedToken(EnumToks))
+    return true;
+
+  // Effectively a switch statement on the token kinds
+  for (auto EnumPair : EnumMap)
+    if (CurTok->Kind == EnumPair.first) {
+      *Enum = EnumPair.second;
+      return false;
+    }
+
+  llvm_unreachable("Switch for an expected token was not provided");
+  return true;
+}
+
+bool RootSignatureParser::ParseShaderVisibility(ShaderVisibility *Enum) {
+  // Define the possible flag kinds
+  llvm::SmallDenseMap<TokenKind, ShaderVisibility> EnumMap = {
+#define SHADER_VISIBILITY_ENUM(NAME, LIT) {TokenKind::en_##NAME, ShaderVisibility::NAME},
+#include "clang/Parse/HLSLRootSignatureTokenKinds.def"
+  };
+
+  return ParseEnum(EnumMap, Enum);
 }
 
 RootSignatureToken RootSignatureParser::PeekNextToken() {

@@ -106,6 +106,21 @@ private:
   bool ParseRootElement();
   bool ParseDescriptorTable();
 
+  // Helper dispatch method
+  //
+  // These will switch on the Variant kind to dispatch to the respective Parse
+  // method and store the parsed value back into Ref.
+  //
+  // It is helpful to have a generalized dispatch method so that when we need
+  // to parse multiple optional parameters in any order, we can invoke this
+  // method
+  bool ParseParam(rs::ParamType Ref);
+
+  // Various flags/enum parsing helpers
+  template<typename EnumVal>
+  bool ParseEnum(llvm::SmallDenseMap<TokenKind, EnumVal> EnumMap, EnumVal *Enum);
+  bool ParseShaderVisibility(rs::ShaderVisibility *Enum);
+
   // Increment the token iterator if we have not reached the end.
   // Return value denotes if we were already at the last token.
   bool ConsumeNextToken();

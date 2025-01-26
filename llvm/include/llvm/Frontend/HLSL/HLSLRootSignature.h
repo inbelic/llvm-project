@@ -20,13 +20,30 @@ namespace llvm {
 namespace hlsl {
 namespace root_signature {
 
+// Definition of the various enumerations and flags
+
+enum class ShaderVisibility {
+  All = 0,
+  Vertex = 1,
+  Hull = 2,
+  Domain = 3,
+  Geometry = 4,
+  Pixel = 5,
+  Amplification = 6,
+  Mesh = 7,
+};
+
 // Models the end of a descriptor table and stores its visibility
 struct DescriptorTable {
+  ShaderVisibility Visibility = ShaderVisibility::All;
   uint32_t NumClauses = 0; // The number of clauses in the table
 };
 
 // Models RootElement : DescriptorTable
 using RootElement = std::variant<DescriptorTable>;
+
+// Models a reference to all non-register parameter types that any RootElement may have
+using ParamType = std::variant<ShaderVisibility *>;
 
 } // namespace root_signature
 } // namespace hlsl
