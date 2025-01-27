@@ -278,6 +278,7 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
     llvm_unreachable("Switch for an expected token was not provided");
     return true;
   }
+  Clause.SetDefaultFlags();
 
   if (ConsumeExpectedToken(TokenKind::pu_l_paren))
     return true;
@@ -293,7 +294,8 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap = {
     {TokenKind::kw_numDescriptors, &Clause.NumDescriptors},
     {TokenKind::kw_space, &Clause.Space},
-    {TokenKind::kw_offset, &Clause.Offset}
+    {TokenKind::kw_offset, &Clause.Offset},
+    {TokenKind::kw_flags, &Clause.Flags}
   };
   if (ParseOptionalParams({RefMap}))
     return true;
@@ -318,6 +320,7 @@ bool RootSignatureParser::ParseParam(ParamType Ref) {
   std::visit(OverloadedMethods{
       [&](uint32_t *X) { Error = ParseUInt(X); },
       [&](DescriptorRangeOffset *X) { Error = ParseDescriptorRangeOffset(X); },
+      [&](DescriptorRangeFlags *Flags) { Error = ParseDescriptorRangeFlags(Flags); },
       [&](ShaderVisibility *Enum) { Error = ParseShaderVisibility(Enum); }
   }, Ref);
 
@@ -404,15 +407,54 @@ bool RootSignatureParser::ParseRegister(Register *Register) {
   return false;
 }
 
-template<typename EnumVal>
-bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumVal> EnumMap, EnumVal *Enum) {
+template<typename FlagType>
+bool RootSignatureParser::ParseFlags(llvm::SmallDenseMap<TokenKind, FlagType> FlagMap, FlagType *Flags) {
+  // Override the default value to correctly or the values
+  *Flags = FlagType(0);
+  FlagType Flag;
+  while (!ParseEnum<true>(FlagMap, &Flag)) {
+    // Store the or
+    *Flags |= Flag ;
+
+    // If we fail to get another | we expect to be at the end of the flags
+    if (TryConsumeExpectedToken(TokenKind::pu_or)) {
+      // Check if we have a trailing delimiter
+      if (PeekExpectedToken({TokenKind::pu_comma, TokenKind::pu_r_paren})) {
+        return ConsumeExpectedToken({TokenKind::pu_comma, TokenKind::pu_r_paren});
+      }
+      // We have an expected delimeter
+      return false;
+    }
+  }
+
+  // Error reported as part of ParseEnum
+  return true;
+}
+
+template<bool AllowZero, typename EnumType>
+bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumType> EnumMap, EnumType *Enum) {
   SmallVector<TokenKind> EnumToks;
+
+  if (AllowZero)
+    EnumToks.push_back(TokenKind::int_literal); //  '0' is a valid flag value
+
   for (auto EnumPair : EnumMap)
     EnumToks.push_back(EnumPair.first);
 
   // Required mandatory flag argument
   if (ConsumeExpectedToken(EnumToks))
     return true;
+
+  // Handle the edge case when '0' is used to specify None
+  if (CurTok->Kind == TokenKind::int_literal) {
+    if (CurTok->NumLiteral.getInt() != 0) {
+      Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_non_zero_flag);
+      return true;
+    }
+    // Set enum to None equivalent
+    *Enum = EnumType(0);
+    return false;
+  }
 
   // Effectively a switch statement on the token kinds
   for (auto EnumPair : EnumMap)
@@ -423,6 +465,16 @@ bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumVal> Enum
 
   llvm_unreachable("Switch for an expected token was not provided");
   return true;
+}
+
+bool RootSignatureParser::ParseDescriptorRangeFlags(DescriptorRangeFlags *Flags) {
+  // Define the possible flag kinds
+  llvm::SmallDenseMap<TokenKind, DescriptorRangeFlags> FlagMap = {
+#define DESCRIPTOR_RANGE_FLAG_ENUM(NAME, LIT, ON) {TokenKind::en_##NAME, DescriptorRangeFlags::NAME},
+#include "clang/Parse/HLSLRootSignatureTokenKinds.def"
+  };
+
+  return ParseFlags(FlagMap, Flags);
 }
 
 bool RootSignatureParser::ParseShaderVisibility(ShaderVisibility *Enum) {
