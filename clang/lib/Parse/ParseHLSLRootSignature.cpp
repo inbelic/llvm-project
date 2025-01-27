@@ -282,6 +282,13 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   if (ConsumeExpectedToken(TokenKind::pu_l_paren))
     return true;
 
+  // Consume mandatory Register paramater
+  if (ConsumeExpectedToken(
+          {TokenKind::bReg, TokenKind::tReg, TokenKind::uReg, TokenKind::sReg}))
+    return true;
+  if (ParseRegister(&Clause.Register))
+    return true;
+
   if (ConsumeExpectedToken(TokenKind::pu_r_paren))
     return true;
 
@@ -304,6 +311,30 @@ bool RootSignatureParser::ParseParam(ParamType Ref) {
   }, Ref);
 
   return Error;
+}
+
+bool RootSignatureParser::ParseRegister(Register *Register) {
+  switch (CurTok->Kind) {
+  case TokenKind::bReg:
+    Register->ViewType = RegisterType::BReg;
+    break;
+  case TokenKind::tReg:
+    Register->ViewType = RegisterType::TReg;
+    break;
+  case TokenKind::uReg:
+    Register->ViewType = RegisterType::UReg;
+    break;
+  case TokenKind::sReg:
+    Register->ViewType = RegisterType::SReg;
+    break;
+  default:
+    llvm_unreachable("Switch for an expected token was not provided");
+    return true;
+  }
+
+  Register->Number = CurTok->NumLiteral.getInt().getExtValue();
+
+  return false;
 }
 
 template<typename EnumVal>

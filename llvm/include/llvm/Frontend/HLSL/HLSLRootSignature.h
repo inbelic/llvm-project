@@ -34,6 +34,15 @@ enum class ShaderVisibility {
   Mesh = 7,
 };
 
+// Definitions of the in-memory data layout structures
+
+// Models the different registers: bReg | tReg | uReg | sReg
+enum class RegisterType { BReg, TReg, UReg, SReg };
+struct Register {
+  RegisterType ViewType;
+  uint32_t Number;
+};
+
 // Models the end of a descriptor table and stores its visibility
 struct DescriptorTable {
   ShaderVisibility Visibility = ShaderVisibility::All;
@@ -44,6 +53,7 @@ struct DescriptorTable {
 using ClauseType = llvm::dxil::ResourceClass;
 struct DescriptorTableClause {
   ClauseType Type;
+  Register Register;
 };
 
 // Models RootElement : DescriptorTable

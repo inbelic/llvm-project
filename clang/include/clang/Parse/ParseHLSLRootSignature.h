@@ -117,6 +117,9 @@ private:
   // method
   bool ParseParam(rs::ParamType Ref);
 
+  // Common parsing helpers
+  bool ParseRegister(rs::Register *Reg);
+
   // Various flags/enum parsing helpers
   template<typename EnumVal>
   bool ParseEnum(llvm::SmallDenseMap<TokenKind, EnumVal> EnumMap, EnumVal *Enum);
