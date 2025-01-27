@@ -122,7 +122,8 @@ private:
 
   // Common parsing helpers
   bool ParseRegister(rs::Register *Reg);
-  bool ParseUInt(uint32_t *Enum);
+  bool ParseUInt(uint32_t *X);
+  bool ParseDescriptorRangeOffset(rs::DescriptorRangeOffset *X);
 
   // Various flags/enum parsing helpers
   template<typename EnumVal>

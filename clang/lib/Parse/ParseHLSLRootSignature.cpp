@@ -292,7 +292,8 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   // Parse optional paramaters
   llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap = {
     {TokenKind::kw_numDescriptors, &Clause.NumDescriptors},
-    {TokenKind::kw_space, &Clause.Space}
+    {TokenKind::kw_space, &Clause.Space},
+    {TokenKind::kw_offset, &Clause.Offset}
   };
   if (ParseOptionalParams({RefMap}))
     return true;
@@ -316,6 +317,7 @@ bool RootSignatureParser::ParseParam(ParamType Ref) {
   bool Error;
   std::visit(OverloadedMethods{
       [&](uint32_t *X) { Error = ParseUInt(X); },
+      [&](DescriptorRangeOffset *X) { Error = ParseDescriptorRangeOffset(X); },
       [&](ShaderVisibility *Enum) { Error = ParseShaderVisibility(Enum); }
   }, Ref);
 
@@ -353,6 +355,20 @@ bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs:
     return true;
   }
 
+  return false;
+}
+
+bool RootSignatureParser::ParseDescriptorRangeOffset(DescriptorRangeOffset *X) {
+  if (ConsumeExpectedToken({TokenKind::int_literal, TokenKind::en_DescriptorRangeOffsetAppend}))
+    return true;
+
+  // Edge case for the offset enum -> static value
+  if (CurTok->Kind == TokenKind::en_DescriptorRangeOffsetAppend) {
+    *X = DescriptorTableOffsetAppend;
+    return false;
+  }
+
+  *X = DescriptorRangeOffset(CurTok->NumLiteral.getInt().getExtValue());
   return false;
 }
 

@@ -34,6 +34,8 @@ enum class ShaderVisibility {
   Mesh = 7,
 };
 
+enum class DescriptorRangeOffset : uint32_t;
+
 // Definitions of the in-memory data layout structures
 
 // Models the different registers: bReg | tReg | uReg | sReg
@@ -49,6 +51,7 @@ struct DescriptorTable {
   uint32_t NumClauses = 0; // The number of clauses in the table
 };
 
+static const DescriptorRangeOffset DescriptorTableOffsetAppend = DescriptorRangeOffset(0xffffffff);
 // Models DTClause : CBV | SRV | UAV | Sampler, by collecting like parameters
 using ClauseType = llvm::dxil::ResourceClass;
 struct DescriptorTableClause {
@@ -56,13 +59,14 @@ struct DescriptorTableClause {
   Register Register;
   uint32_t NumDescriptors = 1;
   uint32_t Space = 0;
+  DescriptorRangeOffset Offset = DescriptorTableOffsetAppend;
 };
 
 // Models RootElement : DescriptorTable
 using RootElement = std::variant<DescriptorTable, DescriptorTableClause>;
 
 // Models a reference to all non-register parameter types that any RootElement may have
-using ParamType = std::variant<uint32_t *, ShaderVisibility *>;
+using ParamType = std::variant<uint32_t *, DescriptorRangeOffset *, ShaderVisibility *>;
 
 } // namespace root_signature
 } // namespace hlsl
