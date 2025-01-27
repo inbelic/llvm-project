@@ -331,7 +331,7 @@ bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs:
 
   llvm::SmallDenseSet<TokenKind> Seen;
 
-  bool Empty = false;
+  bool Empty = true;
   bool HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
 
   while (HasComma && !TryConsumeExpectedToken(ParamKeywords)) {
