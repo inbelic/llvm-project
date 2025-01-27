@@ -309,7 +309,7 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
   const llvm::StringLiteral Source = R"cc(
     DescriptorTable(
       CBV(b0),
-      SRV(t42),
+      SRV(t42, numDescriptors = 4),
       Sampler(s987),
       UAV(u987234),
       visibility = SHADER_VISIBILITY_PIXEL
@@ -338,24 +338,28 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::CBuffer);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::BReg);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)0);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
 
   Elem = Elements[1];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::SRV);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::TReg);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)42);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)4);
 
   Elem = Elements[2];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::Sampler);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::SReg);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)987);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
 
   Elem = Elements[3];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::UAV);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::UReg);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)987234);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
 
   Elem = Elements[4];
   ASSERT_TRUE(std::holds_alternative<DescriptorTable>(Elem));
@@ -445,5 +449,32 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidParseTrailingCommaTest) {
 
   ASSERT_TRUE(Consumer->IsSatisfied());
 }
+
+TEST_F(ParseHLSLRootSignatureTest, InvalidParseRepatedParamTest) {
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable(
+      CBV(b0, numDescriptors = 3, numDescriptors = 1)
+    )
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  // Test correct diagnostic produced
+  Consumer->SetExpected(diag::err_hlsl_rootsig_repeat_param);
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
+
+  SmallVector<hlsl::RootSignatureToken> Tokens;
+  ASSERT_FALSE(Lexer.Lex(Tokens));
+
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
+
+  ASSERT_TRUE(Parser.Parse());
+
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
 
 } // anonymous namespace

@@ -1811,5 +1811,6 @@ def err_hlsl_rootsig_extra_tokens : Error<"extra tokens at end of root signature
 def err_hlsl_rootsig_unexpected_eof : Error<"unexpected end to token stream">;
 def err_hlsl_rootsig_unexpected_token_kind : Error<"expected the %select{following|one of the following}0 token kinds '%1'">;
 def err_hlsl_rootsig_trailing_comma : Error<"trailing comma implies an extra argument but there was none">;
+def err_hlsl_rootsig_repeat_param : Error<"specified the same parameter '%0' multiple times">;
 
 } // end of Parser diagnostics

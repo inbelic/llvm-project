@@ -54,13 +54,14 @@ using ClauseType = llvm::dxil::ResourceClass;
 struct DescriptorTableClause {
   ClauseType Type;
   Register Register;
+  uint32_t NumDescriptors = 1;
 };
 
 // Models RootElement : DescriptorTable
 using RootElement = std::variant<DescriptorTable, DescriptorTableClause>;
 
 // Models a reference to all non-register parameter types that any RootElement may have
-using ParamType = std::variant<ShaderVisibility *>;
+using ParamType = std::variant<uint32_t *, ShaderVisibility *>;
 
 } // namespace root_signature
 } // namespace hlsl

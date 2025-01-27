@@ -289,6 +289,13 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   if (ParseRegister(&Clause.Register))
     return true;
 
+  // Parse optional paramaters
+  llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap = {
+    {TokenKind::kw_numDescriptors, &Clause.NumDescriptors}
+  };
+  if (ParseOptionalParams({RefMap}))
+    return true;
+
   if (ConsumeExpectedToken(TokenKind::pu_r_paren))
     return true;
 
@@ -307,10 +314,53 @@ bool RootSignatureParser::ParseParam(ParamType Ref) {
 
   bool Error;
   std::visit(OverloadedMethods{
+      [&](uint32_t *X) { Error = ParseUInt(X); },
       [&](ShaderVisibility *Enum) { Error = ParseShaderVisibility(Enum); }
   }, Ref);
 
   return Error;
+}
+
+bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap) {
+  SmallVector<TokenKind> ParamKeywords;
+  for (auto RefPair : RefMap)
+    ParamKeywords.push_back(RefPair.first);
+
+  llvm::SmallDenseSet<TokenKind> Seen;
+
+  bool Empty = false;
+  bool HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+
+  while (HasComma && !TryConsumeExpectedToken(ParamKeywords)) {
+    TokenKind ParamKind = CurTok->Kind;
+    if (Seen.contains(ParamKind)) {
+      Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_repeat_param)
+      << "TODO pretty print tokenkinds";
+      return true;
+    }
+    Seen.insert(ParamKind);
+
+    if (ParseParam(RefMap[ParamKind]))
+      return true;
+
+    Empty = true;
+    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+  }
+
+  if (HasComma && !Empty) {
+    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_trailing_comma);
+    return true;
+  }
+
+  return false;
+}
+
+bool RootSignatureParser::ParseUInt(uint32_t *X) {
+  if (ConsumeExpectedToken(TokenKind::int_literal))
+    return true;
+
+  *X = CurTok->NumLiteral.getInt().getExtValue();
+  return false;
 }
 
 bool RootSignatureParser::ParseRegister(Register *Register) {

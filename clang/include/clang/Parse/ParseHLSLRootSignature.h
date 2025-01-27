@@ -117,8 +117,12 @@ private:
   // method
   bool ParseParam(rs::ParamType Ref);
 
+  // Parse as many optional parameters as possible in any order
+  bool ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap);
+
   // Common parsing helpers
   bool ParseRegister(rs::Register *Reg);
+  bool ParseUInt(uint32_t *Enum);
 
   // Various flags/enum parsing helpers
   template<typename EnumVal>
