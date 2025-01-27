@@ -23,6 +23,8 @@ namespace root_signature {
 
 // Definition of the various enumerations and flags
 
+enum class DescriptorRangeOffset : uint32_t;
+
 enum class ShaderVisibility {
   All = 0,
   Vertex = 1,
@@ -33,8 +35,6 @@ enum class ShaderVisibility {
   Amplification = 6,
   Mesh = 7,
 };
-
-enum class DescriptorRangeOffset : uint32_t;
 
 // Definitions of the in-memory data layout structures
 
