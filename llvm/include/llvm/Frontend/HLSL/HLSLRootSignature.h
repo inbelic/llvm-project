@@ -55,6 +55,7 @@ struct DescriptorTableClause {
   ClauseType Type;
   Register Register;
   uint32_t NumDescriptors = 1;
+  uint32_t Space = 0;
 };
 
 // Models RootElement : DescriptorTable
