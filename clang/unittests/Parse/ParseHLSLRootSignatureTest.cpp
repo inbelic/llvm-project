@@ -34,15 +34,6 @@ class ExpectedDiagConsumer : public DiagnosticConsumer {
 
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                         const Diagnostic &Info) override {
-    llvm::errs() << diag::err_hlsl_rootsig_unexpected_eos
-                 << ": err_hlsl_rootsig_unexpected_eof\n";
-    llvm::errs() << diag::err_hlsl_rootsig_unexpected_token_kind
-                 << ": err_hlsl_rootsig_unexpected_token_kind\n";
-    llvm::errs() << diag::err_hlsl_rootsig_repeat_param
-                 << ": err_hlsl_rootsig_repeat_param\n";
-    llvm::errs() << diag::err_hlsl_rootsig_non_zero_flag
-                 << ": err_hlsl_rootsig_non_zero_flag\n";
-    llvm::errs() << "Got: " << Info.getID() << "\n";
     if (!FirstDiag || !ExpectedDiagID.has_value()) {
       Satisfied = false;
       return;

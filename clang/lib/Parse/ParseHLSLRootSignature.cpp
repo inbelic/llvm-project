@@ -518,7 +518,6 @@ RootSignatureToken RootSignatureParser::PeekNextToken() {
 }
 
 bool RootSignatureParser::ConsumeNextToken() {
-  llvm::errs() << "On: " << FormatTokenKinds({CurTok->Kind}) << "\n";
   CurTok++;
   if (LastTok == CurTok) {
     // Report unexpected end of tokens error
@@ -543,9 +542,6 @@ bool RootSignatureParser::EnsureExpectedToken(TokenKind Expected) {
 bool RootSignatureParser::EnsureExpectedToken(ArrayRef<TokenKind> AnyExpected) {
   if (IsExpectedToken(CurTok->Kind, AnyExpected))
     return false;
-
-  llvm::errs() << "Expected: " << FormatTokenKinds(AnyExpected) << "\n";
-  llvm::errs() << "Got: " << FormatTokenKinds({CurTok->Kind}) << "\n";
 
   // Report unexpected token kind error
   Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_token_kind)
