@@ -34,10 +34,14 @@ class ExpectedDiagConsumer : public DiagnosticConsumer {
 
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                         const Diagnostic &Info) override {
-    llvm::errs() << diag::err_hlsl_rootsig_unexpected_eos << ": err_hlsl_rootsig_unexpected_eof\n";
-    llvm::errs() << diag::err_hlsl_rootsig_unexpected_token_kind << ": err_hlsl_rootsig_unexpected_token_kind\n";
-    llvm::errs() << diag::err_hlsl_rootsig_repeat_param << ": err_hlsl_rootsig_repeat_param\n";
-    llvm::errs() << diag::err_hlsl_rootsig_non_zero_flag << ": err_hlsl_rootsig_non_zero_flag\n";
+    llvm::errs() << diag::err_hlsl_rootsig_unexpected_eos
+                 << ": err_hlsl_rootsig_unexpected_eof\n";
+    llvm::errs() << diag::err_hlsl_rootsig_unexpected_token_kind
+                 << ": err_hlsl_rootsig_unexpected_token_kind\n";
+    llvm::errs() << diag::err_hlsl_rootsig_repeat_param
+                 << ": err_hlsl_rootsig_repeat_param\n";
+    llvm::errs() << diag::err_hlsl_rootsig_non_zero_flag
+                 << ": err_hlsl_rootsig_non_zero_flag\n";
     llvm::errs() << "Got: " << Info.getID() << "\n";
     if (!FirstDiag || !ExpectedDiagID.has_value()) {
       Satisfied = false;
@@ -345,47 +349,63 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
   RootElement Elem = Elements[0];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::CBuffer);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::BReg);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType,
+            RegisterType::BReg);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)0);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Space, (uint32_t)0);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset, DescriptorRangeOffset(DescriptorTableOffsetAppend));
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags, DescriptorRangeFlags::DataStaticWhileSetAtExecute);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset,
+            DescriptorRangeOffset(DescriptorTableOffsetAppend));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags,
+            DescriptorRangeFlags::DataStaticWhileSetAtExecute);
 
   Elem = Elements[1];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::SRV);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::TReg);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)42);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType,
+            RegisterType::TReg);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number,
+            (uint32_t)42);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)4);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Space, (uint32_t)3);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset, DescriptorRangeOffset(32));
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags, DescriptorRangeFlags::None);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset,
+            DescriptorRangeOffset(32));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags,
+            DescriptorRangeFlags::None);
 
   Elem = Elements[2];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::Sampler);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::SReg);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)987);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType,
+            RegisterType::SReg);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number,
+            (uint32_t)987);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Space, (uint32_t)2);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset, DescriptorRangeOffset(DescriptorTableOffsetAppend));
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags, DescriptorRangeFlags::None);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset,
+            DescriptorRangeOffset(DescriptorTableOffsetAppend));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags,
+            DescriptorRangeFlags::None);
 
   Elem = Elements[3];
   ASSERT_TRUE(std::holds_alternative<DescriptorTableClause>(Elem));
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Type, ClauseType::UAV);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType, RegisterType::UReg);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number, (uint32_t)987234);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.ViewType,
+            RegisterType::UReg);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Register.Number,
+            (uint32_t)987234);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).NumDescriptors, (uint32_t)1);
   ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Space, (uint32_t)0);
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset, DescriptorRangeOffset(DescriptorTableOffsetAppend));
-  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags, DescriptorRangeFlags::ValidFlags);
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Offset,
+            DescriptorRangeOffset(DescriptorTableOffsetAppend));
+  ASSERT_EQ(std::get<DescriptorTableClause>(Elem).Flags,
+            DescriptorRangeFlags::ValidFlags);
 
   Elem = Elements[4];
   ASSERT_TRUE(std::holds_alternative<DescriptorTable>(Elem));
   ASSERT_EQ(std::get<DescriptorTable>(Elem).NumClauses, (uint32_t)4);
-  ASSERT_EQ(std::get<DescriptorTable>(Elem).Visibility, ShaderVisibility::Pixel);
+  ASSERT_EQ(std::get<DescriptorTable>(Elem).Visibility,
+            ShaderVisibility::Pixel);
 
   Elem = Elements[5];
   // Test generated DescriptorTable start has correct default values

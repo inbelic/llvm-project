@@ -17,7 +17,10 @@ static std::string FormatTokenKinds(ArrayRef<TokenKind> Kinds) {
     if (!First)
       Out << ", ";
     switch (Kind) {
-#define TOK(X) case TokenKind::X: Out << #X; break;
+#define TOK(X)                                                                 \
+  case TokenKind::X:                                                           \
+    Out << #X;                                                                 \
+    break;
 #include "clang/Parse/HLSLRootSignatureTokenKinds.def"
     }
     First = false;
@@ -257,7 +260,7 @@ bool RootSignatureParser::ParseDescriptorTable() {
     if (!TryConsumeExpectedToken(TokenKind::kw_visibility)) {
       if (SeenVisibility) {
         Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_repeat_param)
-         << FormatTokenKinds(CurTok->Kind);
+            << FormatTokenKinds(CurTok->Kind);
         return true;
       }
       if (ParseParam(&Table.Visibility))
@@ -280,7 +283,8 @@ bool RootSignatureParser::ParseDescriptorTable() {
 }
 
 bool RootSignatureParser::ParseDescriptorTableClause() {
-  if (ConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV, TokenKind::kw_UAV, TokenKind::kw_Sampler}))
+  if (ConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV,
+                            TokenKind::kw_UAV, TokenKind::kw_Sampler}))
     return true;
 
   DescriptorTableClause Clause;
@@ -315,11 +319,10 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
 
   // Parse optional paramaters
   llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap = {
-    {TokenKind::kw_numDescriptors, &Clause.NumDescriptors},
-    {TokenKind::kw_space, &Clause.Space},
-    {TokenKind::kw_offset, &Clause.Offset},
-    {TokenKind::kw_flags, &Clause.Flags}
-  };
+      {TokenKind::kw_numDescriptors, &Clause.NumDescriptors},
+      {TokenKind::kw_space, &Clause.Space},
+      {TokenKind::kw_offset, &Clause.Offset},
+      {TokenKind::kw_flags, &Clause.Flags}};
   if (ParseOptionalParams({RefMap}))
     return true;
 
@@ -330,27 +333,33 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   return false;
 }
 
-template<class... Ts>
-struct OverloadedMethods : Ts... { using Ts::operator()...; };
-template<class... Ts>
-OverloadedMethods(Ts...) -> OverloadedMethods<Ts...>;
+template <class... Ts> struct OverloadedMethods : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts> OverloadedMethods(Ts...) -> OverloadedMethods<Ts...>;
 
 bool RootSignatureParser::ParseParam(ParamType Ref) {
   if (ConsumeExpectedToken(TokenKind::pu_equal))
     return true;
 
   bool Error;
-  std::visit(OverloadedMethods{
-      [&](uint32_t *X) { Error = ParseUInt(X); },
-      [&](DescriptorRangeOffset *X) { Error = ParseDescriptorRangeOffset(X); },
-      [&](DescriptorRangeFlags *Flags) { Error = ParseDescriptorRangeFlags(Flags); },
-      [&](ShaderVisibility *Enum) { Error = ParseShaderVisibility(Enum); }
-  }, Ref);
+  std::visit(OverloadedMethods{[&](uint32_t *X) { Error = ParseUInt(X); },
+                               [&](DescriptorRangeOffset *X) {
+                                 Error = ParseDescriptorRangeOffset(X);
+                               },
+                               [&](DescriptorRangeFlags *Flags) {
+                                 Error = ParseDescriptorRangeFlags(Flags);
+                               },
+                               [&](ShaderVisibility *Enum) {
+                                 Error = ParseShaderVisibility(Enum);
+                               }},
+             Ref);
 
   return Error;
 }
 
-bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap) {
+bool RootSignatureParser::ParseOptionalParams(
+    llvm::SmallDenseMap<TokenKind, rs::ParamType> RefMap) {
   SmallVector<TokenKind> ParamKeywords;
   for (auto RefPair : RefMap)
     ParamKeywords.push_back(RefPair.first);
@@ -365,7 +374,7 @@ bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs:
     TokenKind ParamKind = CurTok->Kind;
     if (Seen.contains(ParamKind)) {
       Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_repeat_param)
-       << FormatTokenKinds(ParamKind);
+          << FormatTokenKinds(ParamKind);
       return true;
     }
     Seen.insert(ParamKind);
@@ -378,7 +387,8 @@ bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs:
 }
 
 bool RootSignatureParser::ParseDescriptorRangeOffset(DescriptorRangeOffset *X) {
-  if (ConsumeExpectedToken({TokenKind::int_literal, TokenKind::en_DescriptorRangeOffsetAppend}))
+  if (ConsumeExpectedToken(
+          {TokenKind::int_literal, TokenKind::en_DescriptorRangeOffsetAppend}))
     return true;
 
   // Edge case for the offset enum -> static value
@@ -423,8 +433,9 @@ bool RootSignatureParser::ParseRegister(Register *Register) {
   return false;
 }
 
-template<typename FlagType>
-bool RootSignatureParser::ParseFlags(llvm::SmallDenseMap<TokenKind, FlagType> FlagMap, FlagType *Flags) {
+template <typename FlagType>
+bool RootSignatureParser::ParseFlags(
+    llvm::SmallDenseMap<TokenKind, FlagType> FlagMap, FlagType *Flags) {
   // Override the default value to 0 so that we can correctly 'or' the values
   *Flags = FlagType(0);
 
@@ -440,8 +451,9 @@ bool RootSignatureParser::ParseFlags(llvm::SmallDenseMap<TokenKind, FlagType> Fl
   return false;
 }
 
-template<bool AllowZero, typename EnumType>
-bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumType> EnumMap, EnumType *Enum) {
+template <bool AllowZero, typename EnumType>
+bool RootSignatureParser::ParseEnum(
+    llvm::SmallDenseMap<TokenKind, EnumType> EnumMap, EnumType *Enum) {
   SmallVector<TokenKind> EnumToks;
   if (AllowZero)
     EnumToks.push_back(TokenKind::int_literal); //  '0' is a valid flag value
@@ -474,10 +486,12 @@ bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumType> Enu
   return true;
 }
 
-bool RootSignatureParser::ParseDescriptorRangeFlags(DescriptorRangeFlags *Flags) {
+bool RootSignatureParser::ParseDescriptorRangeFlags(
+    DescriptorRangeFlags *Flags) {
   // Define the possible flag kinds
   llvm::SmallDenseMap<TokenKind, DescriptorRangeFlags> FlagMap = {
-#define DESCRIPTOR_RANGE_FLAG_ENUM(NAME, LIT, ON) {TokenKind::en_##NAME, DescriptorRangeFlags::NAME},
+#define DESCRIPTOR_RANGE_FLAG_ENUM(NAME, LIT, ON)                              \
+  {TokenKind::en_##NAME, DescriptorRangeFlags::NAME},
 #include "clang/Parse/HLSLRootSignatureTokenKinds.def"
   };
 
@@ -487,7 +501,8 @@ bool RootSignatureParser::ParseDescriptorRangeFlags(DescriptorRangeFlags *Flags)
 bool RootSignatureParser::ParseShaderVisibility(ShaderVisibility *Enum) {
   // Define the possible flag kinds
   llvm::SmallDenseMap<TokenKind, ShaderVisibility> EnumMap = {
-#define SHADER_VISIBILITY_ENUM(NAME, LIT) {TokenKind::en_##NAME, ShaderVisibility::NAME},
+#define SHADER_VISIBILITY_ENUM(NAME, LIT)                                      \
+  {TokenKind::en_##NAME, ShaderVisibility::NAME},
 #include "clang/Parse/HLSLRootSignatureTokenKinds.def"
   };
 
@@ -534,8 +549,7 @@ bool RootSignatureParser::EnsureExpectedToken(ArrayRef<TokenKind> AnyExpected) {
 
   // Report unexpected token kind error
   Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_token_kind)
-      << (unsigned)(AnyExpected.size() != 1)
-      << FormatTokenKinds(AnyExpected);
+      << (unsigned)(AnyExpected.size() != 1) << FormatTokenKinds(AnyExpected);
   return true;
 }
 

@@ -84,7 +84,8 @@ struct DescriptorTable {
   uint32_t NumClauses = 0; // The number of clauses in the table
 };
 
-static const DescriptorRangeOffset DescriptorTableOffsetAppend = DescriptorRangeOffset(0xffffffff);
+static const DescriptorRangeOffset DescriptorTableOffsetAppend =
+    DescriptorRangeOffset(0xffffffff);
 // Models DTClause : CBV | SRV | UAV | Sampler, by collecting like parameters
 using ClauseType = llvm::dxil::ResourceClass;
 struct DescriptorTableClause {
@@ -116,8 +117,10 @@ struct DescriptorTableClause {
 // Models RootElement : DescriptorTable | DescriptorTableClause
 using RootElement = std::variant<DescriptorTable, DescriptorTableClause>;
 
-// Models a reference to all non-register parameter types that any RootElement may have
-using ParamType = std::variant<uint32_t *, DescriptorRangeOffset *, DescriptorRangeFlags *, ShaderVisibility *>;
+// Models a reference to all non-register parameter types that any RootElement
+// may have
+using ParamType = std::variant<uint32_t *, DescriptorRangeOffset *,
+                               DescriptorRangeFlags *, ShaderVisibility *>;
 
 } // namespace root_signature
 } // namespace hlsl
