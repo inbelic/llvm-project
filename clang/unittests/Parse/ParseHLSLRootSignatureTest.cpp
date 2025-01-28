@@ -34,6 +34,11 @@ class ExpectedDiagConsumer : public DiagnosticConsumer {
 
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                         const Diagnostic &Info) override {
+    llvm::errs() << diag::err_hlsl_rootsig_unexpected_eos << ": err_hlsl_rootsig_unexpected_eof\n";
+    llvm::errs() << diag::err_hlsl_rootsig_unexpected_token_kind << ": err_hlsl_rootsig_unexpected_token_kind\n";
+    llvm::errs() << diag::err_hlsl_rootsig_repeat_param << ": err_hlsl_rootsig_repeat_param\n";
+    llvm::errs() << diag::err_hlsl_rootsig_non_zero_flag << ": err_hlsl_rootsig_non_zero_flag\n";
+    llvm::errs() << "Got: " << Info.getID() << "\n";
     if (!FirstDiag || !ExpectedDiagID.has_value()) {
       Satisfied = false;
       return;
@@ -393,10 +398,9 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
 
 // Invalid Parser Tests
 
-TEST_F(ParseHLSLRootSignatureTest, InvalidParseExtraTokenTest) {
+TEST_F(ParseHLSLRootSignatureTest, InvalidParseUnexpectedEOSTest) {
   const llvm::StringLiteral Source = R"cc(
-    DescriptorTable()
-    space
+    DescriptorTable
   )cc";
 
   TrivialModuleLoader ModLoader;
@@ -404,7 +408,7 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidParseExtraTokenTest) {
   auto TokLoc = SourceLocation();
 
   // Test correct diagnostic produced
-  Consumer->SetExpected(diag::err_hlsl_rootsig_extra_tokens);
+  Consumer->SetExpected(diag::err_hlsl_rootsig_unexpected_eos);
   hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
 
   SmallVector<hlsl::RootSignatureToken> Tokens;
@@ -420,7 +424,8 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidParseExtraTokenTest) {
 
 TEST_F(ParseHLSLRootSignatureTest, InvalidParseUnexpectedTokenTest) {
   const llvm::StringLiteral Source = R"cc(
-    DescriptorTable((
+    DescriptorTable()
+    space
   )cc";
 
   TrivialModuleLoader ModLoader;
@@ -429,30 +434,6 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidParseUnexpectedTokenTest) {
 
   // Test correct diagnostic produced
   Consumer->SetExpected(diag::err_hlsl_rootsig_unexpected_token_kind);
-  hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
-
-  SmallVector<hlsl::RootSignatureToken> Tokens;
-  ASSERT_FALSE(Lexer.Lex(Tokens));
-
-  SmallVector<RootElement> Elements;
-  hlsl::RootSignatureParser Parser(Elements, Tokens, Diags);
-
-  ASSERT_TRUE(Parser.Parse());
-
-  ASSERT_TRUE(Consumer->IsSatisfied());
-}
-
-TEST_F(ParseHLSLRootSignatureTest, InvalidParseTrailingCommaTest) {
-  const llvm::StringLiteral Source = R"cc(
-    DescriptorTable(),
-  )cc";
-
-  TrivialModuleLoader ModLoader;
-  auto PP = CreatePP(Source, ModLoader);
-  auto TokLoc = SourceLocation();
-
-  // Test correct diagnostic produced
-  Consumer->SetExpected(diag::err_hlsl_rootsig_trailing_comma);
   hlsl::RootSignatureLexer Lexer(Source, TokLoc, *PP);
 
   SmallVector<hlsl::RootSignatureToken> Tokens;

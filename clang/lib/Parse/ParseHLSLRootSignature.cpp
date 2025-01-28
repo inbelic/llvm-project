@@ -1,9 +1,30 @@
 #include "clang/Parse/ParseHLSLRootSignature.h"
 
+#include "llvm/Support/raw_ostream.h"
+
 using namespace llvm::hlsl::root_signature;
 
 namespace clang {
 namespace hlsl {
+
+// Helper definitions
+
+static std::string FormatTokenKinds(ArrayRef<TokenKind> Kinds) {
+  std::string TokenString;
+  llvm::raw_string_ostream Out(TokenString);
+  bool First = true;
+  for (auto Kind : Kinds) {
+    if (!First)
+      Out << ", ";
+    switch (Kind) {
+#define TOK(X) case TokenKind::X: Out << #X; break;
+#include "clang/Parse/HLSLRootSignatureTokenKinds.def"
+    }
+    First = false;
+  }
+
+  return TokenString;
+}
 
 // Lexer Definitions
 
@@ -186,33 +207,27 @@ bool RootSignatureParser::Parse() {
   if (CurTok == LastTok)
     return false;
 
+  bool First = true;
   // Iterate as many RootElements as possible
-  bool HasComma = true;
-  while (HasComma && IsCurExpectedToken(TokenKind::kw_DescriptorTable)) {
-    if (ParseRootElement())
+  while (!ParseRootElement(First)) {
+    First = false;
+    // Avoid use of ConsumeNextToken here to skip incorrect end of tokens error
+    CurTok++;
+    if (CurTok == LastTok)
+      return false;
+    if (EnsureExpectedToken(TokenKind::pu_comma))
       return true;
-    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
-    if (HasComma)
-      ConsumeNextToken();
   }
 
-  SourceLocation LastLoc = CurTok->TokLoc;
-  if (HasComma) {
-    // report 'comma' denotes a required extra item
-    Diags.Report(LastLoc, diag::err_hlsl_rootsig_trailing_comma);
-    return true;
-  }
-
-  // Ensure that we are at the end of the tokens
-  CurTok++;
-  if (CurTok != LastTok) {
-    Diags.Report(LastLoc, diag::err_hlsl_rootsig_extra_tokens);
-    return true;
-  }
-  return false;
+  return true;
 }
 
-bool RootSignatureParser::ParseRootElement() {
+bool RootSignatureParser::ParseRootElement(bool First) {
+  if (First && EnsureExpectedToken(TokenKind::kw_DescriptorTable))
+    return true;
+  if (!First && ConsumeExpectedToken(TokenKind::kw_DescriptorTable))
+    return true;
+
   // Dispatch onto the correct parse method
   switch (CurTok->Kind) {
   case TokenKind::kw_DescriptorTable:
@@ -229,28 +244,33 @@ bool RootSignatureParser::ParseDescriptorTable() {
   if (ConsumeExpectedToken(TokenKind::pu_l_paren))
     return true;
 
-  bool HasComma = true;
-  while (HasComma &&
-         !TryConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV,
-                                   TokenKind::kw_UAV, TokenKind::kw_Sampler})) {
+  // Empty case:
+  if (!TryConsumeExpectedToken(TokenKind::pu_r_paren)) {
+    Elements.push_back(Table);
+    return false;
+  }
+
+  bool SeenVisibility = false;
+  // Iterate through all the defined clauses
+  do {
+    // Handle the visibility parameter
+    if (!TryConsumeExpectedToken(TokenKind::kw_visibility)) {
+      if (SeenVisibility) {
+        Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_repeat_param)
+         << FormatTokenKinds(CurTok->Kind);
+        return true;
+      }
+      if (ParseParam(&Table.Visibility))
+        return true;
+      continue;
+    }
+
+    // Otherwise, we expect a clause
     if (ParseDescriptorTableClause())
       return true;
     Table.NumClauses++;
-    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
-  }
 
-  // Consume optional 'visibility' paramater
-  if (HasComma && !TryConsumeExpectedToken(TokenKind::kw_visibility)) {
-    if (ParseParam(&Table.Visibility))
-      return true;
-    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
-  }
-
-  if (HasComma && Table.NumClauses != 0) {
-    // report 'comma' denotes a required extra item
-    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_trailing_comma);
-    return true;
-  }
+  } while (!TryConsumeExpectedToken(TokenKind::pu_comma));
 
   if (ConsumeExpectedToken(TokenKind::pu_r_paren))
     return true;
@@ -260,6 +280,9 @@ bool RootSignatureParser::ParseDescriptorTable() {
 }
 
 bool RootSignatureParser::ParseDescriptorTableClause() {
+  if (ConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV, TokenKind::kw_UAV, TokenKind::kw_Sampler}))
+    return true;
+
   DescriptorTableClause Clause;
   switch (CurTok->Kind) {
   case TokenKind::kw_CBV:
@@ -332,30 +355,23 @@ bool RootSignatureParser::ParseOptionalParams(llvm::SmallDenseMap<TokenKind, rs:
   for (auto RefPair : RefMap)
     ParamKeywords.push_back(RefPair.first);
 
+  // Keep track of which keywords have been seen to report duplicates
   llvm::SmallDenseSet<TokenKind> Seen;
 
-  bool Empty = true;
-  bool HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
+  while (!TryConsumeExpectedToken(TokenKind::pu_comma)) {
+    if (ConsumeExpectedToken(ParamKeywords))
+      return true;
 
-  while (HasComma && !TryConsumeExpectedToken(ParamKeywords)) {
     TokenKind ParamKind = CurTok->Kind;
     if (Seen.contains(ParamKind)) {
       Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_repeat_param)
-      << "TODO pretty print tokenkinds";
+       << FormatTokenKinds(ParamKind);
       return true;
     }
     Seen.insert(ParamKind);
 
     if (ParseParam(RefMap[ParamKind]))
       return true;
-
-    Empty = true;
-    HasComma = !TryConsumeExpectedToken(TokenKind::pu_comma);
-  }
-
-  if (HasComma && !Empty) {
-    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_trailing_comma);
-    return true;
   }
 
   return false;
@@ -409,35 +425,26 @@ bool RootSignatureParser::ParseRegister(Register *Register) {
 
 template<typename FlagType>
 bool RootSignatureParser::ParseFlags(llvm::SmallDenseMap<TokenKind, FlagType> FlagMap, FlagType *Flags) {
-  // Override the default value to correctly or the values
+  // Override the default value to 0 so that we can correctly 'or' the values
   *Flags = FlagType(0);
-  FlagType Flag;
-  while (!ParseEnum<true>(FlagMap, &Flag)) {
-    // Store the or
-    *Flags |= Flag ;
 
-    // If we fail to get another | we expect to be at the end of the flags
-    if (TryConsumeExpectedToken(TokenKind::pu_or)) {
-      // Check if we have a trailing delimiter
-      if (PeekExpectedToken({TokenKind::pu_comma, TokenKind::pu_r_paren})) {
-        return ConsumeExpectedToken({TokenKind::pu_comma, TokenKind::pu_r_paren});
-      }
-      // We have an expected delimeter
-      return false;
-    }
-  }
+  do {
+    FlagType Flag;
+    if (ParseEnum<true>(FlagMap, &Flag))
+      return true;
+    // Store the 'or'
+    *Flags |= Flag;
 
-  // Error reported as part of ParseEnum
-  return true;
+  } while (!TryConsumeExpectedToken(TokenKind::pu_or));
+
+  return false;
 }
 
 template<bool AllowZero, typename EnumType>
 bool RootSignatureParser::ParseEnum(llvm::SmallDenseMap<TokenKind, EnumType> EnumMap, EnumType *Enum) {
   SmallVector<TokenKind> EnumToks;
-
   if (AllowZero)
     EnumToks.push_back(TokenKind::int_literal); //  '0' is a valid flag value
-
   for (auto EnumPair : EnumMap)
     EnumToks.push_back(EnumPair.first);
 
@@ -496,12 +503,13 @@ RootSignatureToken RootSignatureParser::PeekNextToken() {
 }
 
 bool RootSignatureParser::ConsumeNextToken() {
-  if (CurTok == LastTok) {
+  llvm::errs() << "On: " << FormatTokenKinds({CurTok->Kind}) << "\n";
+  CurTok++;
+  if (LastTok == CurTok) {
     // Report unexpected end of tokens error
-    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_eof);
+    Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_eos);
     return true;
   }
-  CurTok++;
   return false;
 }
 
@@ -513,12 +521,22 @@ static bool IsExpectedToken(TokenKind Kind, ArrayRef<TokenKind> AnyExpected) {
   return false;
 }
 
-bool RootSignatureParser::IsCurExpectedToken(TokenKind Expected) {
-  return IsCurExpectedToken(ArrayRef{Expected});
+bool RootSignatureParser::EnsureExpectedToken(TokenKind Expected) {
+  return EnsureExpectedToken(ArrayRef{Expected});
 }
 
-bool RootSignatureParser::IsCurExpectedToken(ArrayRef<TokenKind> AnyExpected) {
-  return IsExpectedToken(CurTok->Kind, AnyExpected);
+bool RootSignatureParser::EnsureExpectedToken(ArrayRef<TokenKind> AnyExpected) {
+  if (IsExpectedToken(CurTok->Kind, AnyExpected))
+    return false;
+
+  llvm::errs() << "Expected: " << FormatTokenKinds(AnyExpected) << "\n";
+  llvm::errs() << "Got: " << FormatTokenKinds({CurTok->Kind}) << "\n";
+
+  // Report unexpected token kind error
+  Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_token_kind)
+      << (unsigned)(AnyExpected.size() != 1)
+      << FormatTokenKinds(AnyExpected);
+  return true;
 }
 
 bool RootSignatureParser::PeekExpectedToken(TokenKind Expected) {
@@ -542,14 +560,8 @@ bool RootSignatureParser::ConsumeExpectedToken(
     ArrayRef<TokenKind> AnyExpected) {
   if (ConsumeNextToken())
     return true;
-  if (IsCurExpectedToken(AnyExpected))
-    return false;
 
-  // Report unexpected token kind error
-  Diags.Report(CurTok->TokLoc, diag::err_hlsl_rootsig_unexpected_token_kind)
-      << (unsigned)(AnyExpected.size() != 1)
-      << "TODO: implement pretty token kind print";
-  return true;
+  return EnsureExpectedToken(AnyExpected);
 }
 
 bool RootSignatureParser::TryConsumeExpectedToken(TokenKind Expected) {

@@ -103,7 +103,7 @@ private:
   bool ReportError(unsigned DiagID);
 
   // Root Element helpers
-  bool ParseRootElement();
+  bool ParseRootElement(bool First);
   bool ParseDescriptorTable();
   bool ParseDescriptorTableClause();
 
@@ -142,8 +142,8 @@ private:
   RootSignatureToken PeekNextToken();
 
   // Is the current token one of the expected kinds
-  bool IsCurExpectedToken(TokenKind AnyExpected);
-  bool IsCurExpectedToken(ArrayRef<TokenKind> AnyExpected);
+  bool EnsureExpectedToken(TokenKind AnyExpected);
+  bool EnsureExpectedToken(ArrayRef<TokenKind> AnyExpected);
 
   // Peek if the next token is of the expected kind.
   //

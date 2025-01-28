@@ -113,7 +113,7 @@ struct DescriptorTableClause {
   }
 };
 
-// Models RootElement : DescriptorTable
+// Models RootElement : DescriptorTable | DescriptorTableClause
 using RootElement = std::variant<DescriptorTable, DescriptorTableClause>;
 
 // Models a reference to all non-register parameter types that any RootElement may have
