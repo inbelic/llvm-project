@@ -42,6 +42,7 @@ TEST_F(LexHLSLRootSignatureTest, ValidLexNumbersTest) {
   // This test will check that we can lex different number tokens
   const llvm::StringLiteral Source = R"cc(
     -42 42 +42 +2147483648
+    42.6785 42.0e-3 .39287E+3
   )cc";
 
   auto TokLoc = SourceLocation();
@@ -54,32 +55,46 @@ TEST_F(LexHLSLRootSignatureTest, ValidLexNumbersTest) {
       hlsl::TokenKind::int_literal, hlsl::TokenKind::pu_plus,
       hlsl::TokenKind::int_literal, hlsl::TokenKind::pu_plus,
       hlsl::TokenKind::int_literal,
+      hlsl::TokenKind::float_literal, hlsl::TokenKind::float_literal,
+      hlsl::TokenKind::float_literal
   };
   CheckTokens(Lexer, Tokens, Expected);
 
   // Sample negative: int component
-  hlsl::RootSignatureToken IntToken = Tokens[1];
-  ASSERT_EQ(IntToken.NumSpelling, "42");
+  hlsl::RootSignatureToken NumToken = Tokens[1];
+  ASSERT_EQ(NumToken.NumSpelling, "42");
 
   // Sample unsigned int
-  IntToken = Tokens[2];
-  ASSERT_EQ(IntToken.NumSpelling, "42");
+  NumToken = Tokens[2];
+  ASSERT_EQ(NumToken.NumSpelling, "42");
 
   // Sample positive: int component
-  IntToken = Tokens[4];
-  ASSERT_EQ(IntToken.NumSpelling, "42");
+  NumToken = Tokens[4];
+  ASSERT_EQ(NumToken.NumSpelling, "42");
 
   // Sample positive int that would overflow the signed representation but
   // is treated as an unsigned integer instead
-  IntToken = Tokens[6];
-  ASSERT_EQ(IntToken.NumSpelling, "2147483648");
+  NumToken = Tokens[6];
+  ASSERT_EQ(NumToken.NumSpelling, "2147483648");
+
+  // Sample standard float
+  NumToken = Tokens[7];
+  ASSERT_EQ(NumToken.NumSpelling, "42.6785");
+
+  // Sample exp float
+  NumToken = Tokens[8];
+  ASSERT_EQ(NumToken.NumSpelling, "42.0e-3");
+
+  // Sample '.' float with exp
+  NumToken = Tokens[9];
+  ASSERT_EQ(NumToken.NumSpelling, ".39287E+3");
 }
 
 TEST_F(LexHLSLRootSignatureTest, ValidLexAllTokensTest) {
   // This test will check that we can lex all defined tokens as defined in
   // HLSLRootSignatureTokenKinds.def, plus some additional integer variations
   const llvm::StringLiteral Source = R"cc(
-    42
+    42 42.0
 
     b0 t43 u987 s234
 
