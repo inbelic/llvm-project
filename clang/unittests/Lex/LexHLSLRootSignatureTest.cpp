@@ -51,13 +51,11 @@ TEST_F(LexHLSLRootSignatureTest, ValidLexNumbersTest) {
 
   SmallVector<hlsl::RootSignatureToken> Tokens;
   SmallVector<hlsl::TokenKind> Expected = {
-      hlsl::TokenKind::pu_minus,    hlsl::TokenKind::int_literal,
-      hlsl::TokenKind::int_literal, hlsl::TokenKind::pu_plus,
-      hlsl::TokenKind::int_literal, hlsl::TokenKind::pu_plus,
-      hlsl::TokenKind::int_literal,
-      hlsl::TokenKind::float_literal, hlsl::TokenKind::float_literal,
-      hlsl::TokenKind::float_literal
-  };
+      hlsl::TokenKind::pu_minus,      hlsl::TokenKind::int_literal,
+      hlsl::TokenKind::int_literal,   hlsl::TokenKind::pu_plus,
+      hlsl::TokenKind::int_literal,   hlsl::TokenKind::pu_plus,
+      hlsl::TokenKind::int_literal,   hlsl::TokenKind::float_literal,
+      hlsl::TokenKind::float_literal, hlsl::TokenKind::float_literal};
   CheckTokens(Lexer, Tokens, Expected);
 
   // Sample negative: int component

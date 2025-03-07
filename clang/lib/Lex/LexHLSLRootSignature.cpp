@@ -7,8 +7,8 @@ namespace hlsl {
 
 static bool IsNumberChar(char C) {
   // TODO(#126565): extend for float support exponents
-  return isdigit(C) // integer support
-         || C == '.' // float support
+  return isdigit(C)                                       // integer support
+         || C == '.'                                      // float support
          || C == 'e' || C == 'E' || C == '+' || C == '-'; // exp support
 }
 
@@ -40,8 +40,10 @@ RootSignatureToken RootSignatureLexer::LexToken() {
   // Number literal
   if (isdigit(C) || C == '.') {
     Result.NumSpelling = Buffer.take_while(IsNumberChar);
-    bool OnlyDigits = Result.NumSpelling.take_while(isdigit) == Result.NumSpelling;
-    Result.Kind = OnlyDigits ? TokenKind::int_literal : TokenKind::float_literal;
+    bool OnlyDigits =
+        Result.NumSpelling.take_while(isdigit) == Result.NumSpelling;
+    Result.Kind =
+        OnlyDigits ? TokenKind::int_literal : TokenKind::float_literal;
     AdvanceBuffer(Result.NumSpelling.size());
     return Result;
   }
