@@ -177,7 +177,7 @@ TEST_F(ParseHLSLRootSignatureTest, ValidFloatsTest) {
   // Sample neg exp float
   ASSERT_FALSE(Parser.ParseFloat(&X));
   ASSERT_EQ(X, 0.0087987f);
-  
+
   ASSERT_TRUE(Consumer->IsSatisfied());
 }
 

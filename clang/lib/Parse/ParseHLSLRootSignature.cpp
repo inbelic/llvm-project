@@ -248,7 +248,6 @@ bool RootSignatureParser::HandleUIntLiteral(uint32_t &X) {
   return false;
 }
 
-
 bool RootSignatureParser::HandleFloatLiteral(float &X, bool Negate) {
   // Parse the numeric value and do semantic checks on its specification
   clang::NumericLiteralParser Literal(CurToken.NumSpelling, CurToken.TokLoc,
@@ -257,7 +256,8 @@ bool RootSignatureParser::HandleFloatLiteral(float &X, bool Negate) {
   if (Literal.hadError)
     return true; // Error has already been reported so just return
 
-  assert(Literal.isFloatingLiteral() && "IsNumberChar will only support digits");
+  assert(Literal.isFloatingLiteral() &&
+         "IsNumberChar will only support digits");
 
   llvm::APFloat Val = llvm::APFloat(0.f);
   llvm::RoundingMode RM = llvm::RoundingMode::NearestTiesToEven;
