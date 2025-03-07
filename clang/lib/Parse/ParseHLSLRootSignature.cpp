@@ -248,6 +248,33 @@ bool RootSignatureParser::HandleUIntLiteral(uint32_t &X) {
   return false;
 }
 
+
+bool RootSignatureParser::HandleFloatLiteral(float &X, bool Negate) {
+  // Parse the numeric value and do semantic checks on its specification
+  clang::NumericLiteralParser Literal(CurToken.NumSpelling, CurToken.TokLoc,
+                                      PP.getSourceManager(), PP.getLangOpts(),
+                                      PP.getTargetInfo(), PP.getDiagnostics());
+  if (Literal.hadError)
+    return true; // Error has already been reported so just return
+
+  assert(Literal.isFloatingLiteral() && "IsNumberChar will only support digits");
+
+  llvm::APFloat Val = llvm::APFloat(0.f);
+  llvm::RoundingMode RM = llvm::RoundingMode::NearestTiesToEven;
+
+  auto Res = Literal.GetFloatValue(Val, RM);
+  bool Exact = Res == llvm::APFloat::opStatus::opOK;
+  // Inexact denotes if there was rounding required when storing the floating
+  // point in its respective format and is not treated as an error
+  bool Inexact = Res == llvm::APFloat::opStatus::opInexact;
+  if (!Exact && !Inexact))
+    return true;
+
+  Val = Negate ? -Val : Val;
+  X = Val.convertToFloat();
+  return false;
+}
+
 bool RootSignatureParser::ParseRegister(Register *Register) {
   if (ConsumeExpectedToken(
           {TokenKind::bReg, TokenKind::tReg, TokenKind::uReg, TokenKind::sReg},
@@ -285,6 +312,34 @@ bool RootSignatureParser::ParseUInt(uint32_t *X) {
     return true;
 
   if (HandleUIntLiteral(*X))
+    return true; // propogate NumericLiteralParser error
+
+  return false;
+}
+
+bool RootSignatureParser::ParseFloat(float *X) {
+  bool Negate = false;
+  if (TryConsumeExpectedToken(TokenKind::pu_minus))
+    Negate = true;
+  else
+    TryConsumeExpectedToken(TokenKind::pu_plus);
+
+  // Handle an integer used as a float parameter
+  if (PeekExpectedToken(TokenKind::int_literal)) {
+    uint32_t Temp;
+    if (ParseUInt(&Temp))
+      return true;
+    *X = static_cast<float>(Temp);
+    if (Negate)
+      *X = -(*X);
+    return false;
+  }
+
+  if (ConsumeExpectedToken(TokenKind::float_literal, diag::err_hlsl_expected,
+                           "float literal"))
+    return true;
+
+  if (HandleFloatLiteral(*X, Negate))
     return true; // propogate NumericLiteralParser error
 
   return false;

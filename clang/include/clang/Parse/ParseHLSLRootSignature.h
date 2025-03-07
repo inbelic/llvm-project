@@ -37,6 +37,9 @@ public:
   /// Returns true if a parsing error is encountered.
   bool Parse();
 
+  // Temporaily public for testing until it can be invoked through StaticSampler
+  bool ParseFloat(float *X);
+
   DiagnosticsEngine &Diags() { return PP.getDiagnostics(); }
 
 private:
@@ -71,6 +74,9 @@ private:
   /// Use NumericLiteralParser to convert CurToken.NumSpelling into a unsigned
   /// 32-bit integer
   bool HandleUIntLiteral(uint32_t &X);
+  /// Use NumericLiteralParser to convert CurToken.NumSpelling into a float
+  bool HandleFloatLiteral(float &X, bool Negate);
+
   bool ParseRegister(llvm::hlsl::rootsig::Register *Reg);
   bool ParseUInt(uint32_t *X);
   bool

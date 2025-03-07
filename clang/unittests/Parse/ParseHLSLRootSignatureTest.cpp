@@ -126,6 +126,61 @@ TEST_F(ParseHLSLRootSignatureTest, ValidParseEmptyTest) {
   ASSERT_TRUE(Consumer->IsSatisfied());
 }
 
+TEST_F(ParseHLSLRootSignatureTest, ValidFloatsTest) {
+  const llvm::StringLiteral Source = R"cc(
+    42
+    -42
+    +42.125
+    42.1253
+    -0.32
+    62.25e+2
+    87.987E-4
+  )cc";
+
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP(Source, ModLoader);
+  auto TokLoc = SourceLocation();
+
+  hlsl::RootSignatureLexer Lexer(Source, TokLoc);
+  SmallVector<RootElement> Elements;
+  hlsl::RootSignatureParser Parser(Elements, Lexer, *PP);
+
+  // Test no diagnostics produced
+  Consumer->SetNoDiag();
+
+  float X;
+
+  // Sample int as float
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, 42.f);
+
+  // Sample signed int as float
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, -42.f);
+
+  // Sample float that can be stored exactly
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, 42.125f);
+
+  // Sample float that can't be stored exactly
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, 42.1253f);
+
+  // Sample negative
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, -0.32f);
+
+  // Sample exp float
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, 6225.f);
+
+  // Sample neg exp float
+  ASSERT_FALSE(Parser.ParseFloat(&X));
+  ASSERT_EQ(X, 0.0087987f);
+  
+  ASSERT_TRUE(Consumer->IsSatisfied());
+}
+
 TEST_F(ParseHLSLRootSignatureTest, ValidParseDTClausesTest) {
   const llvm::StringLiteral Source = R"cc(
     DescriptorTable(
