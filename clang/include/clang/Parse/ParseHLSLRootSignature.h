@@ -43,14 +43,25 @@ private:
   /// All private Parse.* methods follow a similar pattern:
   ///   - Each method will start with an assert to denote what the CurToken is
   /// expected to be and will parse from that token forward
+  ///
   ///   - Therefore, it is the callers responsibility to ensure that you are
   /// at the correct CurToken. This should be done with the pattern of:
-  ///  if (TryConsumeExpectedToken(TokenKind)
+  ///
+  ///  if (TryConsumeExpectedToken(TokenKind))
   ///    if (Parse.*())
   ///      return true;
+  ///
+  /// or,
+  ///
+  ///  if (ConsumeExpectedToken(TokenKind, ...))
+  ///    return true;
+  ///  if (Parse.*())
+  ///    return true;
+  ///
   ///   - All methods return true if a parsing error is encountered. It is the
   /// callers responsibility to propogate this error up, or deal with it
   /// otherwise
+  ///
   ///   - An error will be raised if the proceeding tokens are not what is
   /// expected, or, there is a lexing error
 
@@ -88,6 +99,14 @@ private:
   bool ParseParams(
       llvm::SmallDenseMap<TokenKind, llvm::hlsl::rootsig::ParamType> &Params,
       llvm::SmallDenseSet<TokenKind> &Mandatory);
+
+  /// Parameter parse methods corresponding to a ParamType
+  bool ParseUIntParam(uint32_t *X);
+  bool ParseRegister(llvm::hlsl::rootsig::Register *Reg);
+
+  /// Use NumericLiteralParser to convert CurToken.NumSpelling into a unsigned
+  /// 32-bit integer
+  bool HandleUIntLiteral(uint32_t *X);
 
   /// Invoke the Lexer to consume a token and update CurToken with the result
   void ConsumeNextToken() { CurToken = Lexer.ConsumeToken(); }

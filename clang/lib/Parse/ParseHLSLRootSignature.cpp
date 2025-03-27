@@ -1,5 +1,7 @@
 #include "clang/Parse/ParseHLSLRootSignature.h"
 
+#include "clang/Lex/LiteralSupport.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm::hlsl::rootsig;
@@ -97,25 +99,41 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
          "Expects to only be invoked starting at given keyword");
 
   DescriptorTableClause Clause;
+  TokenKind ExpectedRegister;
   switch (CurToken.Kind) {
   default:
     break; // Unreachable given Try + assert pattern
   case TokenKind::kw_CBV:
     Clause.Type = ClauseType::CBuffer;
+    ExpectedRegister = TokenKind::bReg;
     break;
   case TokenKind::kw_SRV:
     Clause.Type = ClauseType::SRV;
+    ExpectedRegister = TokenKind::tReg;
     break;
   case TokenKind::kw_UAV:
     Clause.Type = ClauseType::UAV;
+    ExpectedRegister = TokenKind::uReg;
     break;
   case TokenKind::kw_Sampler:
     Clause.Type = ClauseType::Sampler;
+    ExpectedRegister = TokenKind::sReg;
     break;
   }
 
   if (ConsumeExpectedToken(TokenKind::pu_l_paren, diag::err_expected_after,
                            CurToken.Kind))
+    return true;
+
+  llvm::SmallDenseMap<TokenKind, ParamType> Params = {
+      {ExpectedRegister, &Clause.Register},
+      {TokenKind::kw_space, &Clause.Space},
+  };
+  llvm::SmallDenseSet<TokenKind> Mandatory = {
+      ExpectedRegister,
+  };
+
+  if (ParseParams(Params, Mandatory))
     return true;
 
   if (ConsumeExpectedToken(TokenKind::pu_r_paren, diag::err_expected_after,
@@ -126,13 +144,22 @@ bool RootSignatureParser::ParseDescriptorTableClause() {
   return false;
 }
 
-// Helper struct so that we can use the overloaded notation of std::visit
+// Helper struct defined to use the overloaded notation of std::visit.
 template <class... Ts> struct ParseMethods : Ts... { using Ts::operator()...; };
 template <class... Ts> ParseMethods(Ts...) -> ParseMethods<Ts...>;
 
 bool RootSignatureParser::ParseParam(ParamType Ref) {
-  bool Error;
-  std::visit(ParseMethods{}, Ref);
+  bool Error = false;
+  std::visit(ParseMethods{
+                 [&](Register *X) { Error = ParseRegister(X); },
+                 [&](uint32_t *X) {
+                   Error = ConsumeExpectedToken(TokenKind::pu_equal,
+                                                diag::err_expected_after,
+                                                CurToken.Kind) ||
+                           ParseUIntParam(X);
+                 },
+             },
+             Ref);
 
   return Error;
 }
@@ -175,6 +202,67 @@ bool RootSignatureParser::ParseParams(
   }
 
   return !AllMandatoryDefined;
+}
+
+bool RootSignatureParser::ParseUIntParam(uint32_t *X) {
+  assert(CurToken.Kind == TokenKind::pu_equal &&
+         "Expects to only be invoked starting at given keyword");
+  TryConsumeExpectedToken(TokenKind::pu_plus);
+  return ConsumeExpectedToken(TokenKind::int_literal, diag::err_expected_after,
+                              CurToken.Kind) ||
+         HandleUIntLiteral(X);
+}
+
+bool RootSignatureParser::ParseRegister(Register *Register) {
+  assert(
+      (CurToken.Kind == TokenKind::bReg || CurToken.Kind == TokenKind::tReg ||
+       CurToken.Kind == TokenKind::uReg || CurToken.Kind == TokenKind::sReg) &&
+      "Expects to only be invoked starting at given keyword");
+
+  switch (CurToken.Kind) {
+  case TokenKind::bReg:
+    Register->ViewType = RegisterType::BReg;
+    break;
+  case TokenKind::tReg:
+    Register->ViewType = RegisterType::TReg;
+    break;
+  case TokenKind::uReg:
+    Register->ViewType = RegisterType::UReg;
+    break;
+  case TokenKind::sReg:
+    Register->ViewType = RegisterType::SReg;
+    break;
+  default:
+    break; // Unreachable given Try + assert pattern
+  }
+
+  if (HandleUIntLiteral(&Register->Number))
+    return true; // propogate NumericLiteralParser error
+
+  return false;
+}
+
+bool RootSignatureParser::HandleUIntLiteral(uint32_t *X) {
+  // Parse the numeric value and do semantic checks on its specification
+  clang::NumericLiteralParser Literal(CurToken.NumSpelling, CurToken.TokLoc,
+                                      PP.getSourceManager(), PP.getLangOpts(),
+                                      PP.getTargetInfo(), PP.getDiagnostics());
+  if (Literal.hadError)
+    return true; // Error has already been reported so just return
+
+  assert(Literal.isIntegerLiteral() && "IsNumberChar will only support digits");
+
+  llvm::APSInt Val = llvm::APSInt(32, false);
+  if (Literal.GetIntegerValue(Val)) {
+    // Report that the value has overflowed
+    PP.getDiagnostics().Report(CurToken.TokLoc,
+                               diag::err_hlsl_number_literal_overflow)
+        << 0 << CurToken.NumSpelling;
+    return true;
+  }
+
+  *X = Val.getExtValue();
+  return false;
 }
 
 // Returns true when given token is one of the expected kinds
