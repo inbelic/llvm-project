@@ -33,6 +33,7 @@
 #include "clang/Sema/ParsedAttr.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Sema/Template.h"
+#include "llvm/ADT/IntervalTree.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
@@ -942,6 +943,64 @@ void SemaHLSL::emitLogicalOperatorFixIt(Expr *LHS, Expr *RHS,
       << NewFnName << FixItHint::CreateReplacement(FullRange, OS.str());
 }
 
+struct RegisterRanges {
+  using RRTree =
+      llvm::IntervalTree<uint32_t, const llvm::hlsl::rootsig::RootElement *>;
+  using RRAllocator = RRTree::Allocator;
+
+  RRAllocator Allocator;
+  RRTree Ranges;
+
+  RegisterRanges() : Ranges(Allocator) {}
+};
+
+static bool semaRootSignatureElements(
+    SmallVector<llvm::hlsl::rootsig::RootElement> &Elements,
+    DiagnosticsEngine &Diag) {
+
+  llvm::SmallDenseMap<uint32_t, RegisterRanges> RangesMap;
+
+  for (const auto &Elem : Elements) {
+    if (const auto *Clause =
+            std::get_if<llvm::hlsl::rootsig::DescriptorTableClause>(&Elem)) {
+      auto It = RangesMap.insert({Clause->Space, RegisterRanges()}).first;
+      if (Clause->NumDescriptors == 0)
+        return true; // report invalid NumDescriptors value
+      uint32_t Unbounded = static_cast<uint32_t>(-1);
+      uint32_t A = Clause->Register;
+      uint32_t B =
+          Clause->NumDescriptors == Unbounded
+              ? Unbounded
+              : (A + Clause->NumDescriptors - 1); // sub 1 for to use
+                                                  // inclusive intervals
+      It->second.Ranges.insert(A, B, &Elem);
+    }
+  }
+
+  for (auto &Range : RangesMap)
+    Range.second.Ranges.create();
+
+  for (const auto &Elem : Elements) {
+    bool Found = false;
+    uint32_t Space = 0;
+    uint32_t Register = 0;
+    if (const auto *Clause =
+            std::get_if<llvm::hlsl::rootsig::DescriptorTableClause>(&Elem)) {
+      Found = true;
+      Space = Clause->Space;
+      Register = Clause->Register;
+    }
+    if (Found) {
+      auto It = RangesMap.find(Space);
+      auto Contained = It->second.Ranges.getContaining(Register);
+      if (Contained.size() != 1)
+        return true; // report interval overlap
+    }
+  }
+
+  return false;
+}
+
 void SemaHLSL::handleRootSignatureAttr(Decl *D, const ParsedAttr &AL) {
   if (AL.getNumArgs() != 1) {
     Diag(AL.getLoc(), diag::err_attribute_wrong_number_arguments) << AL << 1;
@@ -960,6 +1019,10 @@ void SemaHLSL::handleRootSignatureAttr(Decl *D, const ParsedAttr &AL) {
   hlsl::RootSignatureParser Parser(Elements, Lexer, SemaRef.getPreprocessor());
 
   if (Parser.parse())
+    return;
+
+  // Perform semnatic analysis of generated root signature elements
+  if (semaRootSignatureElements(Elements, SemaRef.getDiagnostics()))
     return;
 
   // Allocate elements onto AST context

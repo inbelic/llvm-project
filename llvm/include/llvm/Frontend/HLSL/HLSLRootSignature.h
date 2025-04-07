@@ -32,6 +32,9 @@ struct DescriptorTable {
 using ClauseType = llvm::dxil::ResourceClass;
 struct DescriptorTableClause {
   ClauseType Type;
+  uint32_t Space = 0;
+  uint32_t Register = 3;
+  uint32_t NumDescriptors = 1;
 };
 
 // Models RootElement : DescriptorTable | DescriptorTableClause
