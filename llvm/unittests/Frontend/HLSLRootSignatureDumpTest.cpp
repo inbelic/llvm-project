@@ -13,6 +13,60 @@ using namespace llvm::hlsl::rootsig;
 
 namespace {
 
+TEST(HLSLRootSignatureTest, RootCBVDump) {
+  RootParam Param;
+  Param.Type = ParamType::CBuffer;
+  Param.Reg = {RegisterType::BReg, 0};
+  Param.setDefaultFlags();
+
+  std::string Out;
+  llvm::raw_string_ostream OS(Out);
+  Param.dump(OS);
+  OS.flush();
+
+  std::string Expected = "CBV(b0, space = 0, visibility = All, "
+                         "flags = DataStaticWhileSetAtExecute)";
+  EXPECT_EQ(Out, Expected);
+}
+
+TEST(HLSLRootSignatureTest, RootSRVDump) {
+  RootParam Param;
+  Param.Type = ParamType::SRV;
+  Param.Reg = {RegisterType::TReg, 546876};
+  Param.Space = 88793;
+  Param.Visibility = ShaderVisibility::Amplification;
+  Param.Flags = RootDescriptorFlags::None;
+
+  std::string Out;
+  llvm::raw_string_ostream OS(Out);
+  Param.dump(OS);
+  OS.flush();
+
+  std::string Expected =
+      "SRV(t546876, space = 88793, visibility = Amplification, "
+      "flags = None)";
+  EXPECT_EQ(Out, Expected);
+}
+
+TEST(HLSLRootSignatureTest, RootUAVDump) {
+  RootParam Param;
+  Param.Type = ParamType::UAV;
+  Param.Reg = {RegisterType::UReg, 43879};
+  Param.Space = 0;
+  Param.Visibility = ShaderVisibility::Vertex;
+  Param.Flags = RootDescriptorFlags::ValidFlags;
+
+  std::string Out;
+  llvm::raw_string_ostream OS(Out);
+  Param.dump(OS);
+  OS.flush();
+
+  std::string Expected = "UAV(u43879, space = 0, visibility = Vertex, "
+                         "flags = DataVolatile | DataStaticWhileSetAtExecute "
+                         "| DataStatic)";
+  EXPECT_EQ(Out, Expected);
+}
+
 TEST(HLSLRootSignatureTest, DescriptorCBVClauseDump) {
   DescriptorTableClause Clause;
   Clause.Type = ClauseType::CBuffer;

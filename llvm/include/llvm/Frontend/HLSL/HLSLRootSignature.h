@@ -182,6 +182,8 @@ struct RootParam {
       break;
     }
   }
+
+  void dump(raw_ostream &OS) const;
 };
 
 // Models the end of a descriptor table and stores its visibility
@@ -259,6 +261,7 @@ struct StaticSampler {
 using RootElement =
     std::variant<RootFlags, RootConstants, RootParam, DescriptorTable,
                  DescriptorTableClause, StaticSampler>;
+
 void dumpRootElements(raw_ostream &OS, ArrayRef<RootElement> Elements);
 
 class MetadataBuilder {

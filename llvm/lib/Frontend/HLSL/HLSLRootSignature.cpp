@@ -71,11 +71,6 @@ static raw_ostream &operator<<(raw_ostream &OS,
   return OS;
 }
 
-void DescriptorTable::dump(raw_ostream &OS) const {
-  OS << "DescriptorTable(numClauses = " << NumClauses
-     << ", visibility = " << Visibility << ")";
-}
-
 static raw_ostream &operator<<(raw_ostream &OS, const ClauseType &Type) {
   switch (Type) {
   case ClauseType::CBuffer:
@@ -91,6 +86,42 @@ static raw_ostream &operator<<(raw_ostream &OS, const ClauseType &Type) {
     OS << "Sampler";
     break;
   }
+
+  return OS;
+}
+
+static raw_ostream &operator<<(raw_ostream &OS,
+                               const RootDescriptorFlags &Flags) {
+  bool FlagSet = false;
+  unsigned Remaining = llvm::to_underlying(Flags);
+  while (Remaining) {
+    unsigned Bit = 1u << llvm::countr_zero(Remaining);
+    if (Remaining & Bit) {
+      if (FlagSet)
+        OS << " | ";
+
+      switch (static_cast<RootDescriptorFlags>(Bit)) {
+      case RootDescriptorFlags::DataVolatile:
+        OS << "DataVolatile";
+        break;
+      case RootDescriptorFlags::DataStaticWhileSetAtExecute:
+        OS << "DataStaticWhileSetAtExecute";
+        break;
+      case RootDescriptorFlags::DataStatic:
+        OS << "DataStatic";
+        break;
+      default:
+        OS << "invalid: " << Bit;
+        break;
+      }
+
+      FlagSet = true;
+    }
+    Remaining &= ~Bit;
+  }
+
+  if (!FlagSet)
+    OS << "None";
 
   return OS;
 }
@@ -135,6 +166,16 @@ static raw_ostream &operator<<(raw_ostream &OS,
     OS << "None";
 
   return OS;
+}
+
+void RootParam::dump(raw_ostream &OS) const {
+  OS << Type << "(" << Reg << ", space = " << Space
+     << ", visibility = " << Visibility << ", flags = " << Flags << ")";
+}
+
+void DescriptorTable::dump(raw_ostream &OS) const {
+  OS << "DescriptorTable(numClauses = " << NumClauses
+     << ", visibility = " << Visibility << ")";
 }
 
 void DescriptorTableClause::dump(raw_ostream &OS) const {
