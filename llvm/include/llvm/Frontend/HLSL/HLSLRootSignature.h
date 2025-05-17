@@ -15,6 +15,7 @@
 #define LLVM_FRONTEND_HLSL_HLSLROOTSIGNATURE_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/IntervalMap.h"
 #include "llvm/Support/DXILABI.h"
 #include "llvm/Support/raw_ostream.h"
 #include <variant>
@@ -280,6 +281,38 @@ private:
   llvm::LLVMContext &Ctx;
   ArrayRef<RootElement> Elements;
   SmallVector<Metadata *> GeneratedMetadata;
+};
+
+// RangeInfo holds the information to correctly construct a ResourceRange
+// and retains this information to be used for displaying a better diagnostic
+struct RangeInfo {
+  const static uint32_t Unbounded = static_cast<uint32_t>(-1);
+
+  llvm::dxil::ResourceClass Class;
+  uint32_t Space;
+  uint32_t LowerBound;
+  uint32_t UpperBound;
+  ShaderVisibility Vis;
+};
+
+class ResourceRange {
+public:
+  using IMap = llvm::IntervalMap<uint32_t, const RangeInfo *, 16,
+                                 llvm::IntervalMapInfo<uint32_t>>;
+private:
+  IMap Intervals;
+
+public:
+  ResourceRange(IMap::Allocator &Allocator) : Intervals(IMap(Allocator)) {}
+
+  // Return true if the RangeInfo overlaps with an existing RangeInfo
+  bool overlaps(const RangeInfo &Info) const;
+
+  // Return the mapped RangeInfo at X or nullptr if no mapping exists
+  const RangeInfo *lookup(uint32_t X) const;
+
+  // Adjusts the mapping to ensure that [a;b] maps to a respective RangeInfo
+  bool insert(const RangeInfo &Info);
 };
 
 } // namespace rootsig

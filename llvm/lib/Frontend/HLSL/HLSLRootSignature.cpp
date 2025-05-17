@@ -222,6 +222,54 @@ MDNode *MetadataBuilder::BuildDescriptorTableClause(
            });
 }
 
+bool ResourceRange::overlaps(const RangeInfo &Info) const {
+  return Intervals.overlaps(Info.LowerBound, Info.UpperBound);
+}
+
+const RangeInfo *ResourceRange::lookup(uint32_t X) const {
+    return Intervals.lookup(X, nullptr);
+}
+
+bool ResourceRange::insert(const RangeInfo &Info) {
+  uint32_t LowerBound = Info.LowerBound;
+  uint32_t UpperBound = Info.UpperBound;
+
+  assert(LowerBound <= UpperBound && "Empty interval");
+
+  bool Overlapping = false;
+  IMap::iterator Interval = Intervals.find(LowerBound);
+  // Let Interval = [x;y] and [LowerBound;UpperBound] = [a;b]
+  while (Interval.valid() && Interval.start() <= UpperBound) { // a <= y
+    Overlapping = true;
+
+    if (Interval.start() <= LowerBound && UpperBound <= Interval.stop()) {
+      // x <= a <= b <= y -> encapsulated so no need to insert
+      return Overlapping;
+    }
+
+    if (LowerBound <= Interval.start() && Interval.stop() <= UpperBound) {
+      // a <= x <= y <= b -> encapsulating so erase encapsulated interval
+      Interval.erase();
+    }
+
+    if (LowerBound < Interval.start() && UpperBound <= Interval.stop()) {
+      // a < x <= b <= y -> take front elements
+      UpperBound = Interval.start() - 1;
+    }
+
+    if (Interval.start() <= LowerBound && Interval.stop() < UpperBound) {
+      // x <= a <= y < b -> take back elements
+      LowerBound = Interval.stop() + 1;
+    }
+
+    break;
+  }
+
+  if (LowerBound <= UpperBound)
+    Intervals.insert(LowerBound, UpperBound, &Info);
+  return Overlapping;
+}
+
 } // namespace rootsig
 } // namespace hlsl
 } // namespace llvm
