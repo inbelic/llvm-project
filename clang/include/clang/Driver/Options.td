@@ -9268,6 +9268,17 @@ def hlsl_entrypoint : Option<["-"], "hlsl-entry", KIND_SEPARATE>,
                       Visibility<[ClangOption, CC1Option]>,
                       MarshallingInfoString<TargetOpts<"HLSLEntry">, "\"main\"">,
                       HelpText<"Entry point name for hlsl">;
+def hlsl_rootsig_ver :
+  Joined<["-"], "hlsl-rootsig-ver=">,
+  Group<dxc_Group>,
+  Visibility<[ClangOption, CC1Option]>,
+  HelpText<"Override root signature version for module, allowed values are "
+  "\"rootsig_1_0\" and \"rootsig_1_1\". Defaults to rootsig_1_1 if omitted.">,
+  Values<"rootsig_1_0, rootsig_1_1">,
+  NormalizedValuesScope<"llvm::hlsl::rootsig::RootSignatureVersion">,
+  NormalizedValues<["rootsig_1_0", "rootsig_1_1"]>,
+  MarshallingInfoEnum<TargetOpts<"HLSLRootSigVer">, "rootsig_1_1">;
+
 def dxc_entrypoint : Option<["--", "/", "-"], "E", KIND_JOINED_OR_SEPARATE>,
                      Group<dxc_Group>,
                      Visibility<[DXCOption]>,

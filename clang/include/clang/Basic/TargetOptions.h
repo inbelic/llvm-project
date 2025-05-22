@@ -15,6 +15,7 @@
 #define LLVM_CLANG_BASIC_TARGETOPTIONS_H
 
 #include "clang/Basic/OpenCLOptions.h"
+#include "llvm/Frontend/HLSL/HLSLRootSignatureDef.h"
 #include "llvm/Support/VersionTuple.h"
 #include "llvm/Target/TargetOptions.h"
 #include <string>
@@ -119,6 +120,10 @@ public:
 
   /// The validator version for dxil.
   std::string DxilValidatorVersion;
+
+  /// The HLSL root signature version for dxil
+  llvm::hlsl::rootsig::RootSignatureVersion HLSLRootSigVer =
+      llvm::hlsl::rootsig::RootSignatureVersion::rootsig_1_1;
 
   /// The entry point name for HLSL shader being compiled as specified by -E.
   std::string HLSLEntry;
