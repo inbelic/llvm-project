@@ -84,7 +84,7 @@ TEST(HLSLRootSignatureTest, SingleOverlappingInsertTests) {
   // B = [0;0]
   EXPECT_EQ(Range.lookup(0), &B);
 
-  // C = [6; unbounded]
+  // C = [6;unbounded]
   EXPECT_EQ(Range.lookup(6), &C);
   EXPECT_EQ(Range.lookup(RangeInfo::Unbounded), &C);
 }

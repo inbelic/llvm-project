@@ -250,7 +250,7 @@ std::optional<const RangeInfo *> ResourceRange::insert(const RangeInfo &Info) {
       break;
 
     // Let Interval = [x;y] and [LowerBound;UpperBound] = [a;b] and note that
-    // a <= y implicitly from Intervals.find(LowerBound)
+    // a <= y implicitly from Interval.advanceTo(LowerBound)
     if (UpperBound < Interval.start())
       break; // found interval does not overlap with inserted one
 
@@ -272,7 +272,7 @@ std::optional<const RangeInfo *> ResourceRange::insert(const RangeInfo &Info) {
       //  -> so set b = x - 1 such that [a;x-1] is now the interval to insert
       UpperBound = Interval.start() - 1;
     } else if (Interval.start() <= LowerBound && Interval.stop() < UpperBound) {
-      // a < x <= b <= y implies that [y; b] is not covered but [a;y] is
+      // x <= a <= y < b implies that [y; b] is not covered but [a;y] is
       //  -> so set a = y + 1 such that [y+1;b] is now the interval to insert
       LowerBound = Interval.stop() + 1;
     }
