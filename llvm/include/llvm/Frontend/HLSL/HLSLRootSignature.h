@@ -15,6 +15,7 @@
 #define LLVM_FRONTEND_HLSL_HLSLROOTSIGNATURE_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/Frontend/HLSL/HLSLRootSignatureDef.h"
 #include "llvm/Support/DXILABI.h"
 #include "llvm/Support/raw_ostream.h"
 #include <variant>
@@ -114,7 +115,11 @@ struct DescriptorTableClause {
   uint32_t Offset = DescriptorTableOffsetAppend;
   DescriptorRangeFlags Flags;
 
-  void setDefaultFlags() {
+  void setDefaultFlags(RootSignatureVersion Ver) {
+    if (Ver == RootSignatureVersion::rootsig_1_0) {
+      Flags = DescriptorRangeFlags::DataVolatile;
+      return;
+    }
     switch (Type) {
     case ClauseType::CBuffer:
     case ClauseType::SRV:
