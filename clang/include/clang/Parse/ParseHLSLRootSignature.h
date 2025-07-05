@@ -178,8 +178,8 @@ private:
   ///
   /// Returns true if there was an error reported.
   bool consumeExpectedToken(
-      RootSignatureToken::Kind Expected, unsigned DiagID = diag::err_expected,
-      RootSignatureToken::Kind Context = RootSignatureToken::Kind::invalid);
+      RootSignatureToken::Kind Expected,
+      std::optional<RootSignatureToken::Kind> Context = std::nullopt);
 
   /// Peek if the next token is of the expected kind and if it is then consume
   /// it.
@@ -194,6 +194,10 @@ private:
   /// This allows to currently retrieve the location for multi-token
   /// StringLiterals
   SourceLocation getTokenLocation(RootSignatureToken Tok);
+
+  DiagnosticBuilder reportDiag(unsigned DiagID) {
+    return getDiags().Report(getTokenLocation(CurToken), DiagID);
+  }
 
 private:
   llvm::dxbc::RootSignatureVersion Version;
