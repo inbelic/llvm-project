@@ -246,10 +246,11 @@ std::optional<DescriptorTable> RootSignatureParser::parseDescriptorTable() {
   DescriptorTable Table;
   std::optional<llvm::dxbc::ShaderVisibility> Visibility;
 
-  // Iterate as many Clauses as possible
-  do {
+  // Iterate as many Clauses as possible, until we hit ')'
+  while (!peekExpectedToken(TokenKind::pu_r_paren)) {
     if (tryConsumeExpectedToken({TokenKind::kw_CBV, TokenKind::kw_SRV,
                                  TokenKind::kw_UAV, TokenKind::kw_Sampler})) {
+      // DescriptorTableClause - CBV, SRV, UAV, or Sampler
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Clause = parseDescriptorTableClause();
       if (!Clause.has_value())
@@ -257,6 +258,7 @@ std::optional<DescriptorTable> RootSignatureParser::parseDescriptorTable() {
       Elements.push_back(RootSignatureElement(ElementLoc, *Clause));
       Table.NumClauses++;
     } else if (tryConsumeExpectedToken(TokenKind::kw_visibility)) {
+      // visibility = SHADER_VISIBILITY
       if (Visibility.has_value()) {
         reportDiag(diag::err_hlsl_rootsig_repeat_param) << CurToken.TokKind;
         return std::nullopt;
@@ -268,15 +270,23 @@ std::optional<DescriptorTable> RootSignatureParser::parseDescriptorTable() {
       Visibility = parseShaderVisibility();
       if (!Visibility.has_value())
         return std::nullopt;
+    } else {
+      reportDiag(diag::err_hlsl_rootsig_invalid_param)
+          << /*param of=*/TokenKind::kw_DescriptorTable;
+      return std::nullopt;
     }
-  } while (tryConsumeExpectedToken(TokenKind::pu_comma));
+
+    // ',' denotes another element, otherwise, expected to be at ')'
+    if (!tryConsumeExpectedToken(TokenKind::pu_comma))
+      break;
+  }
+
+  if (consumeExpectedToken(TokenKind::pu_r_paren))
+    return std::nullopt;
 
   // Fill in optional visibility
   if (Visibility.has_value())
     Table.Visibility = Visibility.value();
-
-  if (consumeExpectedToken(TokenKind::pu_r_paren))
-    return std::nullopt;
 
   return Table;
 }

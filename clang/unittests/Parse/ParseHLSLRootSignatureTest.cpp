@@ -1264,4 +1264,31 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidRootElementMissingCommaTest) {
   ASSERT_TRUE(Consumer->isSatisfied());
 }
 
+TEST_F(ParseHLSLRootSignatureTest, InvalidDescriptorTableMissingCommaTest) {
+  // This test will check that an error is produced when there is a missing
+  // comma between parameters
+  const llvm::StringLiteral Source = R"cc(
+    DescriptorTable(
+      CBV(b0)
+      visibility = SHADER_VISIBILITY_ALL
+    )
+  )cc";
+
+  auto Ctx = createMinimalASTContext();
+  StringLiteral *Signature = wrapSource(Ctx, Source);
+
+  TrivialModuleLoader ModLoader;
+  auto PP = createPP(Source, ModLoader);
+
+  SmallVector<RootSignatureElement> Elements;
+  hlsl::RootSignatureParser Parser(RootSignatureVersion::V1_1, Elements,
+                                   Signature, *PP);
+
+  // Test correct diagnostic produced
+  Consumer->setExpected(diag::err_expected);
+  ASSERT_TRUE(Parser.parse());
+
+  ASSERT_TRUE(Consumer->isSatisfied());
+}
+
 } // anonymous namespace
