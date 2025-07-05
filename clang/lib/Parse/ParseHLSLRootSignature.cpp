@@ -25,54 +25,59 @@ RootSignatureParser::RootSignatureParser(
       Lexer(Signature->getString()), PP(PP), CurToken(0) {}
 
 bool RootSignatureParser::parse() {
-  // Iterate as many RootSignatureElements as possible
-  do {
+  // Iterate as many RootSignatureElements as possible, until we hit the
+  // end of the stream
+  while (!peekExpectedToken(TokenKind::end_of_stream)) {
     std::optional<RootSignatureElement> Element = std::nullopt;
     if (tryConsumeExpectedToken(TokenKind::kw_RootFlags)) {
+      // RootFlags
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Flags = parseRootFlags();
       if (!Flags.has_value())
         return true;
       Element = RootSignatureElement(ElementLoc, *Flags);
-    }
-
-    if (tryConsumeExpectedToken(TokenKind::kw_RootConstants)) {
+    } else if (tryConsumeExpectedToken(TokenKind::kw_RootConstants)) {
+      // RootConstants
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Constants = parseRootConstants();
       if (!Constants.has_value())
         return true;
       Element = RootSignatureElement(ElementLoc, *Constants);
-    }
-
-    if (tryConsumeExpectedToken(TokenKind::kw_DescriptorTable)) {
+    } else if (tryConsumeExpectedToken(TokenKind::kw_DescriptorTable)) {
+      // DescriptorTable
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Table = parseDescriptorTable();
       if (!Table.has_value())
         return true;
       Element = RootSignatureElement(ElementLoc, *Table);
-    }
-
-    if (tryConsumeExpectedToken(
-            {TokenKind::kw_CBV, TokenKind::kw_SRV, TokenKind::kw_UAV})) {
+    } else if (tryConsumeExpectedToken(
+                   {TokenKind::kw_CBV, TokenKind::kw_SRV, TokenKind::kw_UAV})) {
+      // RootDescriptor - CBV, SRV, UAV
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Descriptor = parseRootDescriptor();
       if (!Descriptor.has_value())
         return true;
       Element = RootSignatureElement(ElementLoc, *Descriptor);
-    }
-
-    if (tryConsumeExpectedToken(TokenKind::kw_StaticSampler)) {
+    } else if (tryConsumeExpectedToken(TokenKind::kw_StaticSampler)) {
+      // StaticSampler
       SourceLocation ElementLoc = getTokenLocation(CurToken);
       auto Sampler = parseStaticSampler();
       if (!Sampler.has_value())
         return true;
       Element = RootSignatureElement(ElementLoc, *Sampler);
+    } else {
+      reportDiag(diag::err_hlsl_rootsig_invalid_param)
+          << /*param of=*/TokenKind::kw_RootSignature;
+      return true;
     }
 
     if (Element.has_value())
       Elements.push_back(*Element);
 
-  } while (tryConsumeExpectedToken(TokenKind::pu_comma));
+    // ',' denotes another element, otherwise, expected to be at end of stream
+    if (!tryConsumeExpectedToken(TokenKind::pu_comma))
+      break;
+  }
 
   return consumeExpectedToken(TokenKind::end_of_stream);
 }
@@ -251,9 +256,7 @@ std::optional<DescriptorTable> RootSignatureParser::parseDescriptorTable() {
         return std::nullopt;
       Elements.push_back(RootSignatureElement(ElementLoc, *Clause));
       Table.NumClauses++;
-    }
-
-    if (tryConsumeExpectedToken(TokenKind::kw_visibility)) {
+    } else if (tryConsumeExpectedToken(TokenKind::kw_visibility)) {
       if (Visibility.has_value()) {
         reportDiag(diag::err_hlsl_rootsig_repeat_param) << CurToken.TokKind;
         return std::nullopt;

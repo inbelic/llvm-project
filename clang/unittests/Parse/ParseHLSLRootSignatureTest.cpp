@@ -865,7 +865,7 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidParseInvalidTokenTest) {
                                    Signature, *PP);
 
   // Test correct diagnostic produced - invalid token
-  Consumer->setExpected(diag::err_expected);
+  Consumer->setExpected(diag::err_hlsl_rootsig_invalid_param);
   ASSERT_TRUE(Parser.parse());
 
   ASSERT_TRUE(Consumer->isSatisfied());
@@ -1234,6 +1234,31 @@ TEST_F(ParseHLSLRootSignatureTest, InvalidNonZeroFlagsTest) {
 
   // Test correct diagnostic produced
   Consumer->setExpected(diag::err_hlsl_rootsig_non_zero_flag);
+  ASSERT_TRUE(Parser.parse());
+
+  ASSERT_TRUE(Consumer->isSatisfied());
+}
+
+TEST_F(ParseHLSLRootSignatureTest, InvalidRootElementMissingCommaTest) {
+  // This test will check that an error is produced when there is a missing
+  // comma between parameters
+  const llvm::StringLiteral Source = R"cc(
+    RootFlags()
+    RootConstants(num32BitConstants = 1, b0)
+  )cc";
+
+  auto Ctx = createMinimalASTContext();
+  StringLiteral *Signature = wrapSource(Ctx, Source);
+
+  TrivialModuleLoader ModLoader;
+  auto PP = createPP(Source, ModLoader);
+
+  SmallVector<RootSignatureElement> Elements;
+  hlsl::RootSignatureParser Parser(RootSignatureVersion::V1_1, Elements,
+                                   Signature, *PP);
+
+  // Test correct diagnostic produced
+  Consumer->setExpected(diag::err_expected);
   ASSERT_TRUE(Parser.parse());
 
   ASSERT_TRUE(Consumer->isSatisfied());
