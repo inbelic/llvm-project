@@ -21,17 +21,17 @@ TEST(HLSLRootSignatureTest, NoOverlappingInsertTests) {
   RangeInfo A;
   A.LowerBound = 0;
   A.UpperBound = 3;
-  EXPECT_EQ(Range.insert(A), std::nullopt);
+  EXPECT_EQ(Range.insert(&A), std::nullopt);
 
   RangeInfo B;
   B.LowerBound = 4;
   B.UpperBound = 7;
-  EXPECT_EQ(Range.insert(B), std::nullopt);
+  EXPECT_EQ(Range.insert(&B), std::nullopt);
 
   RangeInfo C;
   C.LowerBound = 10;
   C.UpperBound = RangeInfo::Unbounded;
-  EXPECT_EQ(Range.insert(C), std::nullopt);
+  EXPECT_EQ(Range.insert(&C), std::nullopt);
 
   // A = [0;3]
   EXPECT_EQ(Range.lookup(0), &A);
@@ -62,17 +62,17 @@ TEST(HLSLRootSignatureTest, SingleOverlappingInsertTests) {
   RangeInfo A;
   A.LowerBound = 1;
   A.UpperBound = 5;
-  EXPECT_EQ(Range.insert(A), std::nullopt);
+  EXPECT_EQ(Range.insert(&A), std::nullopt);
 
   RangeInfo B;
   B.LowerBound = 0;
   B.UpperBound = 2;
-  EXPECT_EQ(Range.insert(B).value(), &A);
+  EXPECT_EQ(Range.insert(&B).value(), &A);
 
   RangeInfo C;
   C.LowerBound = 4;
   C.UpperBound = RangeInfo::Unbounded;
-  EXPECT_EQ(Range.insert(C).value(), &A);
+  EXPECT_EQ(Range.insert(&C).value(), &A);
 
   // A = [1;5]
   EXPECT_EQ(Range.lookup(1), &A);
@@ -99,17 +99,17 @@ TEST(HLSLRootSignatureTest, MultipleOverlappingInsertTests) {
   RangeInfo A;
   A.LowerBound = 0;
   A.UpperBound = 2;
-  EXPECT_EQ(Range.insert(A), std::nullopt);
+  EXPECT_EQ(Range.insert(&A), std::nullopt);
 
   RangeInfo B;
   B.LowerBound = 4;
   B.UpperBound = 6;
-  EXPECT_EQ(Range.insert(B), std::nullopt);
+  EXPECT_EQ(Range.insert(&B), std::nullopt);
 
   RangeInfo C;
   C.LowerBound = 1;
   C.UpperBound = 5;
-  EXPECT_EQ(Range.insert(C).value(), &A);
+  EXPECT_EQ(Range.insert(&C).value(), &A);
 
   // A = [0;2]
   EXPECT_EQ(Range.lookup(0), &A);
@@ -134,18 +134,18 @@ TEST(HLSLRootSignatureTest, CoverInsertTests) {
   RangeInfo A;
   A.LowerBound = 0;
   A.UpperBound = 2;
-  EXPECT_EQ(Range.insert(A), std::nullopt);
+  EXPECT_EQ(Range.insert(&A), std::nullopt);
 
   RangeInfo B;
   B.LowerBound = 4;
   B.UpperBound = 5;
-  EXPECT_EQ(Range.insert(B), std::nullopt);
+  EXPECT_EQ(Range.insert(&B), std::nullopt);
 
   // Covers B
   RangeInfo C;
   C.LowerBound = 4;
   C.UpperBound = 6;
-  EXPECT_EQ(Range.insert(C).value(), &B);
+  EXPECT_EQ(Range.insert(&C).value(), &B);
 
   // A = [0;2]
   // C = [4;6] <- covers reference to B
@@ -161,7 +161,7 @@ TEST(HLSLRootSignatureTest, CoverInsertTests) {
   RangeInfo D;
   D.LowerBound = 0;
   D.UpperBound = 7;
-  EXPECT_EQ(Range.insert(D).value(), &A);
+  EXPECT_EQ(Range.insert(&D).value(), &A);
 
   // D = [0;7] <- Covers reference to A and C
   EXPECT_EQ(Range.lookup(0), &D);

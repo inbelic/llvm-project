@@ -181,9 +181,9 @@ bool verifyBorderColor(uint32_t BorderColor) {
 bool verifyLOD(float LOD) { return !std::isnan(LOD); }
 
 std::optional<const RangeInfo *>
-ResourceRange::getOverlapping(const RangeInfo &Info) const {
-  MapT::const_iterator Interval = Intervals.find(Info.LowerBound);
-  if (!Interval.valid() || Info.UpperBound < Interval.start())
+ResourceRange::getOverlapping(const RangeInfo *Info) const {
+  MapT::const_iterator Interval = Intervals.find(Info->LowerBound);
+  if (!Interval.valid() || Info->UpperBound < Interval.start())
     return std::nullopt;
   return Interval.value();
 }
@@ -194,9 +194,9 @@ const RangeInfo *ResourceRange::lookup(uint32_t X) const {
 
 void ResourceRange::clear() { return Intervals.clear(); }
 
-std::optional<const RangeInfo *> ResourceRange::insert(const RangeInfo &Info) {
-  uint32_t LowerBound = Info.LowerBound;
-  uint32_t UpperBound = Info.UpperBound;
+std::optional<const RangeInfo *> ResourceRange::insert(const RangeInfo *Info) {
+  uint32_t LowerBound = Info->LowerBound;
+  uint32_t UpperBound = Info->UpperBound;
 
   std::optional<const RangeInfo *> Res = std::nullopt;
   MapT::iterator Interval = Intervals.begin();
@@ -239,7 +239,7 @@ std::optional<const RangeInfo *> ResourceRange::insert(const RangeInfo &Info) {
   }
 
   assert(LowerBound <= UpperBound && "Attempting to insert an empty interval");
-  Intervals.insert(LowerBound, UpperBound, &Info);
+  Intervals.insert(LowerBound, UpperBound, Info);
   return Res;
 }
 

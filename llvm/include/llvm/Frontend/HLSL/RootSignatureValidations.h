@@ -70,7 +70,7 @@ public:
   // Returns a reference to the first RangeInfo that overlaps with
   // [Info.LowerBound;Info.UpperBound], or, std::nullopt if there is no overlap
   LLVM_ABI std::optional<const RangeInfo *>
-  getOverlapping(const RangeInfo &Info) const;
+  getOverlapping(const RangeInfo *Info) const;
 
   // Return the mapped RangeInfo at X or nullptr if no mapping exists
   LLVM_ABI const RangeInfo *lookup(uint32_t X) const;
@@ -86,25 +86,25 @@ public:
   // intervals denoting the Lower/Upper-bounds:
   //
   // A = [0;2]
-  //   insert(A) -> false
+  //   insert(&A) -> false
   //   intervals: [0;2] -> &A
   // B = [5;7]
-  //   insert(B) -> false
+  //   insert(&B) -> false
   //   intervals: [0;2] -> &A, [5;7] -> &B
   // C = [4;7]
-  //   insert(C) -> true
+  //   insert(&C) -> true
   //   intervals: [0;2] -> &A, [4;7] -> &C
   // D = [1;5]
-  //   insert(D) -> true
+  //   insert(&D) -> true
   //   intervals: [0;2] -> &A, [3;3] -> &D, [4;7] -> &C
   // E = [0;unbounded]
-  //   insert(E) -> true
-  //   intervals: [0;unbounded] -> E
+  //   insert(&E) -> true
+  //   intervals: [0;unbounded] -> &E
   //
   // Returns a reference to the first RangeInfo that overlaps with
   // [Info.LowerBound;Info.UpperBound], or, std::nullopt if there is no overlap
   // (equivalent to getOverlapping)
-  LLVM_ABI std::optional<const RangeInfo *> insert(const RangeInfo &Info);
+  LLVM_ABI std::optional<const RangeInfo *> insert(const RangeInfo *Info);
 };
 
 struct OverlappingRanges {
