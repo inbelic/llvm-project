@@ -1086,12 +1086,9 @@ bool SemaHLSL::handleRootSignatureElements(
   using RangeInfo = llvm::hlsl::rootsig::RangeInfo;
   using OverlappingRanges = llvm::hlsl::rootsig::OverlappingRanges;
 
-  // Each RangeInfo will contain an index back to its associated
-  // RootSignatureElement in our Elements ArrayRef
-  size_t InfoIndex = 0;
-
   // 1. Collect RangeInfos
   llvm::SmallVector<RangeInfo> Infos;
+  llvm::SmallVector<const hlsl::RootSignatureElement *> UsedElems;
   for (const hlsl::RootSignatureElement &RootSigElem : Elements) {
     const llvm::hlsl::rootsig::RootElement &Elem = RootSigElem.getElement();
     if (const auto *Descriptor =
@@ -1105,8 +1102,8 @@ bool SemaHLSL::handleRootSignatureElements(
       Info.Space = Descriptor->Space;
       Info.Visibility = Descriptor->Visibility;
 
-      Info.Index = InfoIndex;
       Infos.push_back(Info);
+      UsedElems.push_back(&RootSigElem);
     } else if (const auto *Constants =
                    std::get_if<llvm::hlsl::rootsig::RootConstants>(&Elem)) {
       RangeInfo Info;
@@ -1117,8 +1114,8 @@ bool SemaHLSL::handleRootSignatureElements(
       Info.Space = Constants->Space;
       Info.Visibility = Constants->Visibility;
 
-      Info.Index = InfoIndex;
       Infos.push_back(Info);
+      UsedElems.push_back(&RootSigElem);
     } else if (const auto *Sampler =
                    std::get_if<llvm::hlsl::rootsig::StaticSampler>(&Elem)) {
       RangeInfo Info;
@@ -1129,8 +1126,8 @@ bool SemaHLSL::handleRootSignatureElements(
       Info.Space = Sampler->Space;
       Info.Visibility = Sampler->Visibility;
 
-      Info.Index = InfoIndex;
       Infos.push_back(Info);
+      UsedElems.push_back(&RootSigElem);
     } else if (const auto *Clause =
                    std::get_if<llvm::hlsl::rootsig::DescriptorTableClause>(
                        &Elem)) {
@@ -1145,9 +1142,9 @@ bool SemaHLSL::handleRootSignatureElements(
       Info.Class = Clause->Type;
       Info.Space = Clause->Space;
 
-      // Note: Clause does not hold the visibility this will need to
-      Info.Index = InfoIndex;
+      // Note: Clause does not hold visibility, is updated below
       Infos.push_back(Info);
+      UsedElems.push_back(&RootSigElem);
     } else if (const auto *Table =
                    std::get_if<llvm::hlsl::rootsig::DescriptorTable>(&Elem)) {
       // Table holds the Visibility of all owned Clauses in Table, so iterate
@@ -1160,18 +1157,21 @@ bool SemaHLSL::handleRootSignatureElements(
       for (RangeInfo &Info : TableInfos)
         Info.Visibility = Table->Visibility;
     }
-
-    InfoIndex++;
   }
 
+  ArrayRef<RangeInfo> InfoBuffer = Infos;
+  const RangeInfo * const InfoBufferStart = InfoBuffer.data();
+  ArrayRef<const hlsl::RootSignatureElement *> ElemRefs = UsedElems;
+
   // Helper to report diagnostics
-  auto ReportOverlap = [this, &Elements](OverlappingRanges Overlap) {
+  auto ReportOverlap = [this, &InfoBufferStart, &ElemRefs](OverlappingRanges Overlap) {
     const RangeInfo *Info = Overlap.A;
     const RangeInfo *OInfo = Overlap.B;
     auto CommonVis = Info->Visibility == llvm::dxbc::ShaderVisibility::All
                          ? OInfo->Visibility
                          : Info->Visibility;
-    SourceLocation InfoLoc = Elements[Info->Index].getLocation();
+    size_t InfoIndex = Info - InfoBufferStart;
+    SourceLocation InfoLoc = ElemRefs[InfoIndex]->getLocation();
     this->Diag(InfoLoc, diag::err_hlsl_resource_range_overlap)
         << llvm::to_underlying(Info->Class) << Info->LowerBound
         << /*unbounded=*/(Info->UpperBound == RangeInfo::Unbounded)
@@ -1180,12 +1180,13 @@ bool SemaHLSL::handleRootSignatureElements(
         << /*unbounded=*/(OInfo->UpperBound == RangeInfo::Unbounded)
         << OInfo->UpperBound << Info->Space << CommonVis;
 
-    SourceLocation OInfoLoc = Elements[OInfo->Index].getLocation();
+    size_t OInfoIndex = OInfo - InfoBufferStart;
+    SourceLocation OInfoLoc = ElemRefs[OInfoIndex]->getLocation();
     this->Diag(OInfoLoc, diag::note_hlsl_resource_range_here);
   };
 
   llvm::SmallVector<OverlappingRanges> Overlaps =
-      llvm::hlsl::rootsig::findOverlappingRanges(Infos);
+      llvm::hlsl::rootsig::findOverlappingRanges(InfoBuffer);
   for (OverlappingRanges Overlap : Overlaps)
     ReportOverlap(Overlap);
 

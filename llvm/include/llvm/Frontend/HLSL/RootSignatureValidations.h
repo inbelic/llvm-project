@@ -51,9 +51,6 @@ struct RangeInfo {
   llvm::dxil::ResourceClass Class;
   uint32_t Space;
   llvm::dxbc::ShaderVisibility Visibility;
-
-  // The index retains its original position before being sorted by group.
-  size_t Index;
 };
 
 class ResourceRange {
@@ -137,7 +134,7 @@ struct OverlappingRanges {
 ///   ResourceRange
 ///      B: Check for overlap with any overlapping Visibility ResourceRange
 llvm::SmallVector<OverlappingRanges>
-findOverlappingRanges(llvm::SmallVector<RangeInfo> &Infos);
+findOverlappingRanges(ArrayRef<RangeInfo> Infos);
 
 } // namespace rootsig
 } // namespace hlsl
