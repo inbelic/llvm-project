@@ -28,7 +28,9 @@
                                  "addressU = TEXTURE_ADDRESS_CLAMP, " \
                                  "filter = FILTER_MIN_MAG_MIP_LINEAR )"
 
-// CHECK: -HLSLRootSignatureDecl 0x{{.*}} {{.*}} implicit [[SAMPLE_RS_DECL:__hlsl_rootsig_decl_\d*]]
+// CHECK: -RootSignatureAttr 0x{{.*}} {{.*}} [[SAMPLE_RS_DECL:__hlsl_rootsig_decl_\d*]]
+
+// CHECK: -HLSLRootSignatureDecl 0x{{.*}} {{.*}} implicit [[SAMPLE_RS_DECL]]
 // CHECK-V1_0: version: 1.0,
 // CHECK-V1_1: version: 1.1,
 // CHECK-SAME: RootElements{
@@ -74,8 +76,6 @@
 // CHECK-SAME:   mipLODBias = 0.000000e+00, maxAnisotropy = 16, comparisonFunc = LessEqual,
 // CHECK-SAME:   borderColor = OpaqueWhite, minLOD = 0.000000e+00, maxLOD = 3.402823e+38, space = 0, visibility = All
 // CHECK-SAME: )}
-
-// CHECK: -RootSignatureAttr 0x{{.*}} {{.*}} [[SAMPLE_RS_DECL]]
 [RootSignature(SampleRS)]
 void rs_main() {}
 
@@ -117,7 +117,9 @@ void same_rs_string_main() {}
 // Ensure that when we define a different type root signature that it creates
 // a seperate decl and identifier to reference
 
-// CHECK: -HLSLRootSignatureDecl 0x{{.*}} {{.*}} implicit [[DIFF_RS_DECL:__hlsl_rootsig_decl_\d*]]
+// CHECK: -RootSignatureAttr 0x{{.*}} {{.*}} [[DIFF_RS_DECL:__hlsl_rootsig_decl_\d*]]
+
+// CHECK: -HLSLRootSignatureDecl 0x{{.*}} {{.*}} implicit [[DIFF_RS_DECL]]
 // CHECK-V1_0: version: 1.0,
 // CHECK-V1_1: version: 1.1,
 // CHECK-SAME: RootElements{
@@ -127,7 +129,5 @@ void same_rs_string_main() {}
 // CHECK-SAME: ),
 // CHECK-SAME:   DescriptorTable(numClauses = 1, visibility = All)
 // CHECK-SAME: }
-
-// CHECK: -RootSignatureAttr 0x{{.*}} {{.*}} [[DIFF_RS_DECL]]
 [RootSignature(SampleDifferentRS)]
 void different_rs_string_main() {}

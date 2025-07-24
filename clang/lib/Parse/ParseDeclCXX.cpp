@@ -4892,7 +4892,18 @@ void Parser::ParseMicrosoftUuidAttributeArgs(ParsedAttributes &Attrs) {
   }
 }
 
-void Parser::ParseHLSLRootSignatureAttributeArgs(ParsedAttributes &Attrs) {
+void Parser::ParseHLSLRootSignatureAttributeArgs(ParsedAttributes &Attrs,
+                                                 Decl *D) {
+  // Just ignore for now
+  if (!D) {
+    ConsumeToken();
+    BalancedDelimiterTracker T(*this, tok::l_paren);
+    T.consumeOpen();
+    SkipUntil(tok::r_paren, StopAtSemi | StopBeforeMatch);
+    T.consumeClose();
+    return;
+  }
+
   assert(Tok.is(tok::identifier) &&
          "Expected an identifier to denote which MS attribute to consider");
   IdentifierInfo *RootSignatureIdent = Tok.getIdentifierInfo();
@@ -4966,7 +4977,8 @@ void Parser::ParseHLSLRootSignatureAttributeArgs(ParsedAttributes &Attrs) {
                  ParsedAttr::Form::Microsoft());
 }
 
-void Parser::ParseMicrosoftAttributes(ParsedAttributes &Attrs) {
+void Parser::ParseMicrosoftAttributes(ParsedAttributes &Attrs,
+                                      LateParsedAttrList *LateAttrs) {
   assert(Tok.is(tok::l_square) && "Not a Microsoft attribute list");
 
   SourceLocation StartLoc = Tok.getLocation();
@@ -4992,9 +5004,21 @@ void Parser::ParseMicrosoftAttributes(ParsedAttributes &Attrs) {
         break;
       if (Tok.getIdentifierInfo()->getName() == "uuid")
         ParseMicrosoftUuidAttributeArgs(Attrs);
-      else if (Tok.getIdentifierInfo()->getName() == "RootSignature")
-        ParseHLSLRootSignatureAttributeArgs(Attrs);
-      else {
+      else if (Tok.getIdentifierInfo()->getName() == "RootSignature") {
+        if (LateAttrs) {
+          LateParsedAttribute *LA = new LateParsedAttribute(
+              this, *Tok.getIdentifierInfo(), Tok.getLocation());
+          LA->Toks.push_back(Tok);
+          // Consume the identifier token
+          ConsumeToken();
+          LA->Toks.push_back(Tok);
+          ConsumeParen();
+          // Consume everything up to and including the matching right parens.
+          ConsumeAndStoreUntil(tok::r_paren, LA->Toks, /*StopAtSemi=*/true);
+          LateAttrs->push_back(LA);
+        } else
+          ParseHLSLRootSignatureAttributeArgs(Attrs);
+      } else {
         IdentifierInfo *II = Tok.getIdentifierInfo();
         SourceLocation NameLoc = Tok.getLocation();
         ConsumeToken();

@@ -770,9 +770,12 @@ void Parser::ParseLexedAttribute(LateParsedAttribute &LA,
         Actions.ActOnReenterFunctionContext(Actions.CurScope, D);
       }
 
-      ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, nullptr,
-                            nullptr, SourceLocation(), ParsedAttr::Form::GNU(),
-                            nullptr);
+      if (LA.AttrName.getName() == "RootSignature")
+        ParseHLSLRootSignatureAttributeArgs(Attrs, D);
+      else
+        ParseGNUAttributeArgs(&LA.AttrName, LA.AttrNameLoc, Attrs, nullptr,
+                              nullptr, SourceLocation(),
+                              ParsedAttr::Form::GNU(), nullptr);
 
       if (HasFunScope)
         Actions.ActOnExitFunctionContext();

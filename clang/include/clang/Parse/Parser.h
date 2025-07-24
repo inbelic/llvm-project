@@ -1191,7 +1191,8 @@ private:
     void ParseLexedPragmas() override;
   };
 
-  // A list of late-parsed attributes.  Used by ParseGNUAttributes.
+  // A list of late-parsed attributes.
+  // Used by ParseGNUAttributes and ParseMicrosoftAttributes.
   class LateParsedAttrList : public SmallVector<LateParsedAttribute *, 2> {
   public:
     LateParsedAttrList(bool PSoon = false,
@@ -2285,17 +2286,19 @@ private:
     return false;
   }
 
-  bool MaybeParseMicrosoftAttributes(ParsedAttributes &Attrs) {
+  bool MaybeParseMicrosoftAttributes(ParsedAttributes &Attrs,
+                                     LateParsedAttrList *LateAttrs = nullptr) {
     bool AttrsParsed = false;
     if ((getLangOpts().MicrosoftExt || getLangOpts().HLSL) &&
         Tok.is(tok::l_square)) {
       ParsedAttributes AttrsWithRange(AttrFactory);
-      ParseMicrosoftAttributes(AttrsWithRange);
+      ParseMicrosoftAttributes(AttrsWithRange, LateAttrs);
       AttrsParsed = !AttrsWithRange.empty();
       Attrs.takeAllFrom(AttrsWithRange);
     }
     return AttrsParsed;
   }
+
   bool MaybeParseMicrosoftDeclSpecs(ParsedAttributes &Attrs) {
     if (getLangOpts().DeclSpecKeyword && Tok.is(tok::kw___declspec)) {
       ParseMicrosoftDeclSpecs(Attrs);
@@ -3072,6 +3075,10 @@ private:
   /// Parse uuid() attribute when it appears in a [] Microsoft attribute.
   void ParseMicrosoftUuidAttributeArgs(ParsedAttributes &Attrs);
 
+  /// Parse RootSignature() when it appears in a [] Microsoft attribute.
+  void ParseHLSLRootSignatureAttributeArgs(ParsedAttributes &Attrs,
+                                           Decl *D = nullptr);
+
   /// ParseMicrosoftAttributes - Parse Microsoft attributes [Attr]
   ///
   /// \verbatim
@@ -3082,7 +3089,8 @@ private:
   ///             ms-attribute[opt]
   ///             ms-attribute ms-attribute-seq
   /// \endverbatim
-  void ParseMicrosoftAttributes(ParsedAttributes &Attrs);
+  void ParseMicrosoftAttributes(ParsedAttributes &Attrs,
+                                LateParsedAttrList *LateAttrs = nullptr);
 
   void ParseMicrosoftInheritanceClassAttributes(ParsedAttributes &attrs);
   void ParseNullabilityClassAttributes(ParsedAttributes &attrs);
@@ -3611,8 +3619,6 @@ private:
   /// 'replaceable_if_eligible', or Microsoft 'sealed' or 'abstract' contextual
   /// keyword.
   bool isClassCompatibleKeyword(Token Tok) const;
-
-  void ParseHLSLRootSignatureAttributeArgs(ParsedAttributes &Attrs);
 
   ///@}
 

@@ -1085,8 +1085,12 @@ Parser::DeclGroupPtrTy Parser::ParseDeclOrFunctionDefInternal(
   DS.SetRangeEnd(DeclSpecAttrs.Range.getEnd());
   DS.takeAttributesFrom(DeclSpecAttrs);
 
+  // Save late-parsed microsoft attributes for now; they require information on
+  // the function declaration to be parsed correctly.
+  // These will be parsed in below in ParseLexedAttributeList.
+  LateParsedAttrList LateMicrosoftAttrs(true);
+  MaybeParseMicrosoftAttributes(DS.getAttributes(), &LateMicrosoftAttrs);
   ParsedTemplateInfo TemplateInfo;
-  MaybeParseMicrosoftAttributes(DS.getAttributes());
   // Parse the common declaration-specifiers piece.
   ParseDeclarationSpecifiers(DS, TemplateInfo, AS,
                              DeclSpecContext::DSC_top_level);
@@ -1184,7 +1188,14 @@ Parser::DeclGroupPtrTy Parser::ParseDeclOrFunctionDefInternal(
     return Actions.ConvertDeclToDeclGroup(TheDecl);
   }
 
-  return ParseDeclGroup(DS, DeclaratorContext::File, Attrs, TemplateInfo);
+  DeclGroupPtrTy DG =
+      ParseDeclGroup(DS, DeclaratorContext::File, Attrs, TemplateInfo);
+
+  // Resolve any late Microsoft attributes
+  for (Decl *D : DG.get())
+    ParseLexedAttributeList(LateMicrosoftAttrs, D,
+                            /*EnterScope=*/false, /*OnDefinition=*/false);
+  return DG;
 }
 
 Parser::DeclGroupPtrTy Parser::ParseDeclarationOrFunctionDefinition(

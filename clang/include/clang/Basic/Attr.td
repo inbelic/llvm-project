@@ -4863,6 +4863,8 @@ def RootSignature : Attr {
                              ErrorDiag, "'function'">;
   let LangOpts = [HLSL];
   let Documentation = [RootSignatureDocs];
+
+  let LateParsed = LateAttrParseStandard;
 }
 
 def HLSLNumThreads: InheritableAttr {
