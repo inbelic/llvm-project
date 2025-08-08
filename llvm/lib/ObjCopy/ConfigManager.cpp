@@ -115,11 +115,10 @@ ConfigManager::getDXContainerConfig() const {
       !Common.SymbolsPrefixRemove.empty() || !Common.SymbolsToSkip.empty() ||
       !Common.AllocSectionsPrefix.empty() ||
       Common.DiscardMode != DiscardType::None || !Common.AddSection.empty() ||
-      !Common.DumpSection.empty() || !Common.SymbolsToAdd.empty() ||
-      !Common.KeepSection.empty() || !Common.OnlySection.empty() ||
-      !Common.ToRemove.empty() || !Common.SymbolsToGlobalize.empty() ||
-      !Common.SymbolsToKeep.empty() || !Common.SymbolsToLocalize.empty() ||
-      !Common.SymbolsToRemove.empty() ||
+      !Common.SymbolsToAdd.empty() || !Common.KeepSection.empty() ||
+      !Common.OnlySection.empty() || !Common.ToRemove.empty() ||
+      !Common.SymbolsToGlobalize.empty() || !Common.SymbolsToKeep.empty() ||
+      !Common.SymbolsToLocalize.empty() || !Common.SymbolsToRemove.empty() ||
       !Common.UnneededSymbolsToRemove.empty() ||
       !Common.SymbolsToWeaken.empty() || !Common.SymbolsToKeepGlobal.empty() ||
       !Common.SectionsToRename.empty() || !Common.SetSectionAlignment.empty() ||
@@ -134,8 +133,10 @@ ConfigManager::getDXContainerConfig() const {
       !Common.ChangeSectionAddress.empty()) {
     return createStringError(
         llvm::errc::invalid_argument,
-        "no flags are supported yet, only basic copying is allowed");
+        "option is not supported for DXContainerno flags are supported yet, "
+        "only basic copying is allowed");
   }
 
+  // Accepted: !Common.DumpSection.empty()
   return DXContainer;
 }
