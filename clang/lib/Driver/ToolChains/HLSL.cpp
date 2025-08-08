@@ -247,6 +247,40 @@ void tools::hlsl::MetalConverter::ConstructJob(
                                          Exec, CmdArgs, Inputs, Input));
 }
 
+void tools::hlsl::LLVMObjcopy::ConstructJob(Compilation &C, const JobAction &JA,
+                                            const InputInfo &Output,
+                                            const InputInfoList &Inputs,
+                                            const ArgList &Args,
+                                            const char *LinkingOutput) const {
+
+  std::string ObjcopyPath = getToolChain().GetProgramPath("llvm-objcopy");
+  const char *Exec = Args.MakeArgString(ObjcopyPath);
+
+  { // Handle /Fo
+    ArgStringList CmdArgs;
+    assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
+    const InputInfo &Input = Inputs[0];
+    CmdArgs.push_back(Input.getFilename());
+    CmdArgs.push_back(Output.getFilename());
+
+    C.addCommand(std::make_unique<Command>(
+        JA, *this, ResponseFileSupport::None(), Exec, CmdArgs, Inputs, Input));
+  }
+
+  if (Args.hasArg(options::OPT_dxc_Frs)) { // Handle /Frs
+    ArgStringList CmdArgs;
+    assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
+    const InputInfo &Input = Inputs[0];
+    CmdArgs.push_back(Input.getFilename());
+    StringRef FrsValue = Args.getLastArgValue(options::OPT_dxc_Frs);
+    const char *Frs = Args.MakeArgString(FrsValue);
+    CmdArgs.push_back(Frs);
+
+    C.addCommand(std::make_unique<Command>(
+        JA, *this, ResponseFileSupport::None(), Exec, CmdArgs, Inputs, Input));
+  }
+}
+
 /// DirectX Toolchain
 HLSLToolChain::HLSLToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
@@ -267,6 +301,10 @@ Tool *clang::driver::toolchains::HLSLToolChain::getTool(
     if (!MetalConverter)
       MetalConverter.reset(new tools::hlsl::MetalConverter(*this));
     return MetalConverter.get();
+  case Action::BinaryModifyJobClass:
+    if (!LLVMObjcopy)
+      LLVMObjcopy.reset(new tools::hlsl::LLVMObjcopy(*this));
+    return LLVMObjcopy.get();
   default:
     return ToolChain::getTool(AC);
   }
@@ -404,16 +442,24 @@ bool HLSLToolChain::requiresBinaryTranslation(DerivedArgList &Args) const {
   return Args.hasArg(options::OPT_metal) && Args.hasArg(options::OPT_dxc_Fo);
 }
 
+bool HLSLToolChain::requiresObjcopy(DerivedArgList &Args) const {
+  return Args.hasArg(options::OPT_dxc_Frs) && Args.hasArg(options::OPT_dxc_Fo);
+}
+
 bool HLSLToolChain::isLastJob(DerivedArgList &Args,
                               Action::ActionClass AC) const {
   bool HasTranslation = requiresBinaryTranslation(Args);
   bool HasValidation = requiresValidation(Args);
+  bool HasObjcopy = requiresObjcopy(Args);
   // If translation and validation are not required, we should only have one
   // action.
-  if (!HasTranslation && !HasValidation)
+  if (!HasTranslation && !HasValidation && !HasObjcopy)
     return true;
   if ((HasTranslation && AC == Action::BinaryTranslatorJobClass) ||
-      (!HasTranslation && HasValidation && AC == Action::BinaryAnalyzeJobClass))
+      (!HasTranslation && HasValidation &&
+       AC == Action::BinaryAnalyzeJobClass) ||
+      (!HasTranslation && !HasValidation && HasObjcopy &&
+       AC == Action::BinaryModifyJobClass))
     return true;
   return false;
 }
