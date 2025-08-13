@@ -5192,6 +5192,7 @@ private:
                             SourceLocation *EndLoc = nullptr,
                             bool CouldBeBitField = false);
   Decl *ParseHLSLBuffer(SourceLocation &DeclEnd, ParsedAttributes &Attrs);
+  IdentifierInfo *ParseHLSLRootSignature(StringLiteral *Signature);
 
   ///@}
 

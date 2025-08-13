@@ -13,6 +13,7 @@
 #include "clang/AST/Attr.h"
 #include "clang/Basic/AttributeCommonInfo.h"
 #include "clang/Basic/DiagnosticParse.h"
+#include "clang/Parse/ParseHLSLRootSignature.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/SemaHLSL.h"
@@ -298,4 +299,27 @@ void Parser::ParseHLSLAnnotations(ParsedAttributes &Attrs,
 
   Attrs.addNew(II, Loc, AttributeScopeInfo(), ArgExprs.data(), ArgExprs.size(),
                ParsedAttr::Form::HLSLAnnotation());
+}
+
+IdentifierInfo *Parser::ParseHLSLRootSignature(StringLiteral *Signature) {
+  assert(getLangOpts().HLSL && "ParseHLSLRootSignature is for HLSL only");
+
+  // Construct our identifier
+  auto [DeclIdent, Found] =
+      Actions.HLSL().ActOnStartRootSignatureDecl(Signature->getString());
+  // If we haven't found an already defined DeclIdent then parse the root
+  // signature string and construct the in-memory elements
+  if (!Found) {
+    // Invoke the root signature parser to construct the in-memory constructs
+    hlsl::RootSignatureParser Parser(getLangOpts().HLSLRootSigVer, Signature,
+                                     PP);
+    if (Parser.parse())
+      return nullptr;
+
+    // Construct the declaration.
+    Actions.HLSL().ActOnFinishRootSignatureDecl(
+        Signature->getBeginLoc(), DeclIdent, Parser.getElements());
+  }
+
+  return DeclIdent;
 }
