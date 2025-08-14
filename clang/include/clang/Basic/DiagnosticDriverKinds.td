@@ -797,6 +797,8 @@ def err_drv_invalid_directx_shader_module : Error<
   "invalid profile : %0">;
 def err_drv_dxc_missing_target_profile : Error<
   "target profile option (-T) is missing">;
+def err_drv_dxc_missing_entry_point: Error<
+  "entry point option (-E) is missing">;
 def err_drv_hlsl_unsupported_target : Error<
   "HLSL code generation is unsupported for target '%0'">;
 def err_drv_hlsl_bad_shader_required_in_target : Error<

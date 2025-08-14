@@ -1598,6 +1598,15 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
 
       A->claim();
 
+      // // Finnly: Check if we require any inputs for rootsig target
+      // if (TargetTriple.getEnviornment() == llvm::Triple::EnvironmentType::RootSignature) {
+      //   // Ensure that a target is provided
+      SuppressMissingInputWarning = true;
+      // }
+
+      if (!Args.hasArg(options::OPT_dxc_entrypoint))
+        Diag(diag::err_drv_dxc_missing_entry_point);
+
       if (Args.hasArg(options::OPT_spirv)) {
         const llvm::StringMap<llvm::Triple::SubArchType> ValidTargets = {
             {"vulkan1.2", llvm::Triple::SPIRVSubArch_v15},

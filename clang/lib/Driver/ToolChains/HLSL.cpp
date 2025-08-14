@@ -62,6 +62,11 @@ bool isLegalShaderModel(Triple &T) {
     VersionTuple MinVer(6, 5);
     return MinVer <= Version;
   } break;
+  case Triple::EnvironmentType::RootSignature: {
+      VersionTuple RS_1_1(1, 1);
+      VersionTuple RS_1_2(1, 2);
+      return Version == RS_1_1 || Version == RS_1_2;
+  } break;
   }
   return false;
 }
@@ -84,6 +89,7 @@ std::optional<std::string> tryParseProfile(StringRef Profile) {
           .Case("lib", Triple::EnvironmentType::Library)
           .Case("ms", Triple::EnvironmentType::Mesh)
           .Case("as", Triple::EnvironmentType::Amplification)
+          .Case("rootsig", Triple::EnvironmentType::RootSignature)
           .Default(Triple::EnvironmentType::UnknownEnvironment);
   if (Kind == Triple::EnvironmentType::UnknownEnvironment)
     return std::nullopt;

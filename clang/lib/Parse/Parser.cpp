@@ -594,6 +594,7 @@ void Parser::DestroyTemplateIds() {
 bool Parser::ParseFirstTopLevelDecl(DeclGroupPtrTy &Result,
                                     Sema::ModuleImportState &ImportState) {
   Actions.ActOnStartOfTranslationUnit();
+  llvm::errs() << "We are here!\n";
 
   // For C++20 modules, a module decl must be the first in the TU.  We also
   // need to track module imports.
