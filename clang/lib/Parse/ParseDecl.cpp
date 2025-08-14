@@ -2153,9 +2153,14 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
     return nullptr;
   }
 
-  if (getLangOpts().HLSL)
+  if (getLangOpts().HLSL) {
     while (MaybeParseHLSLAnnotations(D))
       ;
+    if (const IdentifierInfo *II = D.getIdentifier();
+        II && D.isFunctionDeclarator()) {
+      ParseHLSLRootSignatureOverride(II->getName());
+    }
+  }
 
   if (Tok.is(tok::kw_requires))
     ParseTrailingRequiresClause(D);

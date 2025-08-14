@@ -145,7 +145,7 @@ public:
   ///
   /// Returns the identifier and if it was found
   std::pair<IdentifierInfo *, bool>
-  ActOnStartRootSignatureDecl(StringRef Signature);
+  ActOnStartRootSignatureDecl(StringRef Signature, bool IsOverride = false);
 
   /// Creates the Root Signature decl of the parsed Root Signature elements
   /// onto the AST and push it onto current Scope
@@ -220,6 +220,8 @@ private:
   llvm::SmallVector<Decl *> DefaultCBufferDecls;
 
   uint32_t ImplicitBindingNextOrderID = 0;
+
+  IdentifierInfo *RootSigOverrideIdent = nullptr;
 
 private:
   void collectResourceBindingsOnVarDecl(VarDecl *D);

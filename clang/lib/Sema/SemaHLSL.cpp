@@ -729,6 +729,23 @@ void SemaHLSL::ActOnTopLevelFunction(FunctionDecl *FD) {
   if (FD->getName() != TargetInfo.getTargetOpts().HLSLEntry)
     return;
 
+  // If we have specified a root signature to override the entry function then
+  // attach it now
+  if (RootSigOverrideIdent) {
+    LookupResult R(SemaRef, RootSigOverrideIdent, SourceLocation(),
+                   Sema::LookupOrdinaryName);
+    if (SemaRef.LookupQualifiedName(R, FD->getDeclContext()))
+      if (auto *SignatureDecl =
+              dyn_cast<HLSLRootSignatureDecl>(R.getFoundDecl())) {
+        // We could look up the SourceRange of the macro here as well
+        AttributeCommonInfo AL(RootSigOverrideIdent, AttributeScopeInfo(),
+                               SourceRange(), ParsedAttr::Form::Microsoft());
+        FD->dropAttr<RootSignatureAttr>();
+        FD->addAttr(::new (getASTContext()) RootSignatureAttr(
+            getASTContext(), AL, RootSigOverrideIdent, SignatureDecl));
+      }
+  }
+
   llvm::Triple::EnvironmentType Env = TargetInfo.getTriple().getEnvironment();
   if (HLSLShaderAttr::isValidShaderType(Env) && Env != llvm::Triple::Library) {
     if (const auto *Shader = FD->getAttr<HLSLShaderAttr>()) {
@@ -1061,10 +1078,13 @@ void SemaHLSL::emitLogicalOperatorFixIt(Expr *LHS, Expr *RHS,
 }
 
 std::pair<IdentifierInfo *, bool>
-SemaHLSL::ActOnStartRootSignatureDecl(StringRef Signature) {
+SemaHLSL::ActOnStartRootSignatureDecl(StringRef Signature, bool IsOverride) {
   llvm::hash_code Hash = llvm::hash_value(Signature);
   std::string IdStr = "__hlsl_rootsig_decl_" + std::to_string(Hash);
   IdentifierInfo *DeclIdent = &(getASTContext().Idents.get(IdStr));
+
+  if (IsOverride)
+    RootSigOverrideIdent = DeclIdent;
 
   // Check if we have already found a decl of the same name.
   LookupResult R(SemaRef, DeclIdent, SourceLocation(),

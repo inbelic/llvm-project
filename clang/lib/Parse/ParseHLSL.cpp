@@ -13,6 +13,7 @@
 #include "clang/AST/Attr.h"
 #include "clang/Basic/AttributeCommonInfo.h"
 #include "clang/Basic/DiagnosticParse.h"
+#include "clang/Basic/TargetInfo.h"
 #include "clang/Parse/ParseHLSLRootSignature.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
@@ -301,12 +302,13 @@ void Parser::ParseHLSLAnnotations(ParsedAttributes &Attrs,
                ParsedAttr::Form::HLSLAnnotation());
 }
 
-IdentifierInfo *Parser::ParseHLSLRootSignature(StringLiteral *Signature) {
+IdentifierInfo *Parser::ParseHLSLRootSignature(StringLiteral *Signature,
+                                               bool IsOverride) {
   assert(getLangOpts().HLSL && "ParseHLSLRootSignature is for HLSL only");
 
   // Construct our identifier
-  auto [DeclIdent, Found] =
-      Actions.HLSL().ActOnStartRootSignatureDecl(Signature->getString());
+  auto [DeclIdent, Found] = Actions.HLSL().ActOnStartRootSignatureDecl(
+      Signature->getString(), IsOverride);
   // If we haven't found an already defined DeclIdent then parse the root
   // signature string and construct the in-memory elements
   if (!Found) {
@@ -322,4 +324,21 @@ IdentifierInfo *Parser::ParseHLSLRootSignature(StringLiteral *Signature) {
   }
 
   return DeclIdent;
+}
+
+void Parser::ParseHLSLRootSignatureOverride(StringRef FuncName) {
+  if (FuncName != getTargetInfo().getTargetOpts().HLSLEntry)
+    return;
+
+  StringRef RootSigOverride = getLangOpts().HLSLRootSigOverride;
+  if (!RootSigOverride.empty()) {
+    IdentifierInfo *II = &(Actions.getASTContext().Idents.get(RootSigOverride));
+    if (II && PP.isMacroDefined(II)) {
+      clang::MacroInfo *MI = PP.getMacroInfo(II);
+      ExprResult Res = Actions.ActOnUnevaluatedStringLiteral(MI->tokens());
+      if (Res.isUsable())
+        if (auto *Signature = dyn_cast<StringLiteral>(Res.get()))
+          ParseHLSLRootSignature(Signature, /*IsOverride=*/true);
+    }
+  }
 }
