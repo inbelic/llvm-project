@@ -1489,3 +1489,15 @@ bool WrapperFrontendAction::hasCodeCompletionSupport() const {
 WrapperFrontendAction::WrapperFrontendAction(
     std::unique_ptr<FrontendAction> WrappedAction)
   : WrappedAction(std::move(WrappedAction)) {}
+
+bool HLSLFrontendAction::PrepareToExecuteAction(CompilerInstance &CI) {
+  return WrapperFrontendAction::PrepareToExecuteAction();
+}
+
+void HLSLFrontendAction::ExecuteAction() {
+  WrapperFrontendAction::ExecuteAction();
+}
+
+HLSLFrontendAction::HLSLFrontendAction(
+    std::unique_ptr<FrontendAction> WrappedAction)
+  : WrapperFrontendAction(std::move(WrappedAction)) {}

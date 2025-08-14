@@ -341,6 +341,22 @@ public:
   bool hasCodeCompletionSupport() const override;
 };
 
+// This probably isn't the right place for this class. The pattern would imply
+// something like: clang/include/clang/HLSL/Frontend/FrontendActions.h
+class HLSLFrontendAction : public WrapperFrontendAction {
+protected:
+  // Here we can inject custom start-up behaviour for HLSL. For instance:
+  // handle the rootsig target or -define-rootsig options by parsing the root
+  // signature of the macro and adding it to the ASTContext
+  //
+  // We could also short-circuit parsing for -T rootsig_1_1 -E MyRS. So we can
+  // allow no input file.
+  bool PrepareToExecuteAction(CompilerInstance &CI) override;
+  void ExecuteAction() override;
+public:
+    HLSLFrontendAction(std::unique_ptr<FrontendAction> WrappedAction);
+};
+
 }  // end namespace clang
 
 #endif
