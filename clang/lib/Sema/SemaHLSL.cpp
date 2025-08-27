@@ -827,6 +827,10 @@ void SemaHLSL::CheckEntryPoint(FunctionDecl *FD) {
       }
     }
     break;
+  case llvm::Triple::RootSignature:
+    if (!RootSigOverrideIdent)
+      FD->setInvalidDecl();
+    break;
   default:
     llvm_unreachable("Unhandled environment in triple");
   }
@@ -1105,6 +1109,31 @@ void SemaHLSL::ActOnFinishRootSignatureDecl(
 
   SignatureDecl->setImplicit();
   SemaRef.PushOnScopeChains(SignatureDecl, SemaRef.getCurScope());
+}
+
+FunctionDecl *SemaHLSL::CreateRootSignatureEntry(StringRef Entry) {
+  ASTContext &Context = SemaRef.getASTContext();
+  IdentifierInfo *MainFunc = &(Context.Idents.get(Entry));
+
+  QualType ReturnType = Context.VoidTy;
+  FunctionProtoType::ExtProtoInfo EPI;
+  QualType FunctionType = Context.getFunctionType(ReturnType, {}, EPI);
+
+  DeclContext *DC = Context.getTranslationUnitDecl();
+  FunctionDecl *FuncDecl = FunctionDecl::Create(
+      Context, DC, SourceLocation(), SourceLocation(), MainFunc, FunctionType,
+      Context.getTrivialTypeSourceInfo(FunctionType), SC_None);
+
+  CompoundStmt *Body = CompoundStmt::Create(
+    Context, {}, FPOptionsOverride(), SourceLocation(), SourceLocation());
+
+  FuncDecl->setBody(Body);
+  FuncDecl->setImplicit();
+  SemaRef.PushOnScopeChains(FuncDecl, SemaRef.TUScope);
+
+  ActOnTopLevelFunction(FuncDecl);
+
+  return FuncDecl;
 }
 
 namespace {

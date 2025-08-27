@@ -1310,15 +1310,27 @@ void HLSLFrontendAction::ExecuteAction() {
   Sema &S = CI.getSema();
 
   // Register HLSL specific callbacks
+  auto &TargetInfo = CI.getASTContext().getTargetInfo();
+  bool IsRootSignatureTarget =
+      TargetInfo.getTriple().getEnvironment() == llvm::Triple::RootSignature;
+
   auto LangOpts = CI.getLangOpts();
+  StringRef RootSigName = IsRootSignatureTarget
+                              ? TargetInfo.getTargetOpts().HLSLEntry
+                              : LangOpts.HLSLRootSigOverride;
+
   auto MacroCallback = std::make_unique<InjectRootSignatureCallback>(
-      S, LangOpts.HLSLRootSigOverride, LangOpts.HLSLRootSigVer);
+      S, RootSigName, LangOpts.HLSLRootSigVer);
 
   Preprocessor &PP = CI.getPreprocessor();
   PP.addPPCallbacks(std::move(MacroCallback));
 
   // Invoke as normal
-  WrapperFrontendAction::ExecuteAction();
+  if (IsRootSignatureTarget)
+    clang::hlsl::HandleRootSignatureTarget(
+        S, TargetInfo.getTargetOpts().HLSLEntry);
+  else
+    WrapperFrontendAction::ExecuteAction();
 }
 
 HLSLFrontendAction::HLSLFrontendAction(

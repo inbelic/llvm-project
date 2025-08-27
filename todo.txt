@@ -1,0 +1,4 @@
+1. Create a `parseRootSignatureTarget` function in FrontendActions
+2. Only invoke this if the target is specified to be a root signature
+3. Use the target entry name as the hlslrootsig in injectrootsignaturecallback
+4. Initialize the parser minimally compared to `ParseAST`

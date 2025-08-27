@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Parse/ParseHLSLRootSignature.h"
+#include "clang/AST/ASTConsumer.h"
+#include "clang/Parse/Parser.h"
 
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Sema/Sema.h"
@@ -1470,6 +1472,21 @@ IdentifierInfo *ParseHLSLRootSignature(Sema &Actions,
   }
 
   return DeclIdent;
+}
+
+void HandleRootSignatureTarget(Sema &S, StringRef Entry) {
+  ASTConsumer *Consumer = &S.getASTConsumer();
+
+  std::unique_ptr<Parser> ParseOP(new Parser(S.getPreprocessor(), S, true));
+  Parser &P = *ParseOP;
+
+  S.getPreprocessor().EnterMainSourceFile();
+  P.Initialize();
+
+  FunctionDecl *EntryFunc = S.HLSL().CreateRootSignatureEntry(Entry);
+
+  Consumer->HandleTopLevelDecl(DeclGroupRef(EntryFunc));
+  Consumer->HandleTranslationUnit(S.getASTContext());
 }
 
 } // namespace hlsl

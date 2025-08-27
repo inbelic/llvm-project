@@ -4995,17 +4995,18 @@ def HLSLShader : InheritableAttr {
     EnumArgument<"Type", "llvm::Triple::EnvironmentType", /*is_string=*/true,
                  ["pixel", "vertex", "geometry", "hull", "domain", "compute",
                   "raygeneration", "intersection", "anyhit", "closesthit",
-                  "miss", "callable", "mesh", "amplification"],
+                  "miss", "callable", "mesh", "amplification", "rootsignature"],
                  ["Pixel", "Vertex", "Geometry", "Hull", "Domain", "Compute",
                   "RayGeneration", "Intersection", "AnyHit", "ClosestHit",
-                  "Miss", "Callable", "Mesh", "Amplification"],
+                  "Miss", "Callable", "Mesh", "Amplification", "RootSignature"],
                   /*opt=*/0, /*fake=*/0, /*isExternalType=*/1, /*isCovered=*/0>
   ];
   let Documentation = [HLSLSV_ShaderTypeAttrDocs];
   let AdditionalMembers =
 [{
   static bool isValidShaderType(llvm::Triple::EnvironmentType ShaderType) {
-    return ShaderType >= llvm::Triple::Pixel && ShaderType <= llvm::Triple::Amplification;
+    return (ShaderType >= llvm::Triple::Pixel && ShaderType <= llvm::Triple::Amplification)
+     || ShaderType == llvm::Triple::RootSignature;
   }
 }];
 }

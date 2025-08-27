@@ -157,6 +157,8 @@ public:
     RootSigOverrideIdent = DeclIdent;
   }
 
+  FunctionDecl *CreateRootSignatureEntry(StringRef Entry);
+
   // Returns true if any RootSignatureElement is invalid and a diagnostic was
   // produced
   bool
