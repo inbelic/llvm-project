@@ -11,6 +11,7 @@
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Sema/EnterExpressionEvaluationContext.h"
 
 using namespace llvm::hlsl::rootsig;
 
@@ -1483,14 +1484,24 @@ void HandleRootSignatureTarget(Sema &S) {
   std::unique_ptr<Parser> ParseOP(new Parser(S.getPreprocessor(), S, true));
   Parser &P = *ParseOP;
   S.getPreprocessor().EnterMainSourceFile();
-  P.Initialize();
 
-  HLSLRootSignatureDecl *SignatureDecl =
-      S.HLSL().lookupRootSignatureOverrideDecl(
-          S.getASTContext().getTranslationUnitDecl());
+  bool HaveLexer = S.getPreprocessor().getCurrentLexer();
+  if (HaveLexer) {
+    P.Initialize();
+    S.ActOnStartOfTranslationUnit();
 
-  if (SignatureDecl)
-    Consumer->HandleTopLevelDecl(DeclGroupRef(SignatureDecl));
+    // Skim through the file to parse to find the define
+    while (P.getCurToken().getKind() != tok::eof)
+      P.ConsumeAnyToken();
+
+    HLSLRootSignatureDecl *SignatureDecl =
+        S.HLSL().lookupRootSignatureOverrideDecl(
+            S.getASTContext().getTranslationUnitDecl());
+
+    if (SignatureDecl)
+      Consumer->HandleTopLevelDecl(DeclGroupRef(SignatureDecl));
+  }
+
   Consumer->HandleTranslationUnit(S.getASTContext());
 }
 
