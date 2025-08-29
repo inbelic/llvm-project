@@ -7,8 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Parse/ParseHLSLRootSignature.h"
-
+#include "clang/AST/ASTConsumer.h"
 #include "clang/Lex/LiteralSupport.h"
+#include "clang/Parse/Parser.h"
 #include "clang/Sema/Sema.h"
 
 using namespace llvm::hlsl::rootsig;
@@ -1470,6 +1471,27 @@ IdentifierInfo *ParseHLSLRootSignature(Sema &Actions,
   }
 
   return DeclIdent;
+}
+
+void HandleRootSignatureTarget(Sema &S) {
+  ASTConsumer *Consumer = &S.getASTConsumer();
+
+  // Minimally initalize the parser. This does a couple things:
+  // - initializes Sema scope handling
+  // - invokes HLSLExternalSemaSource
+  // - invokes the preprocessor to lex the macros in the file
+  std::unique_ptr<Parser> ParseOP(new Parser(S.getPreprocessor(), S, true));
+  Parser &P = *ParseOP;
+  S.getPreprocessor().EnterMainSourceFile();
+  P.Initialize();
+
+  HLSLRootSignatureDecl *SignatureDecl =
+      S.HLSL().lookupRootSignatureOverrideDecl(
+          S.getASTContext().getTranslationUnitDecl());
+
+  if (SignatureDecl)
+    Consumer->HandleTopLevelDecl(DeclGroupRef(SignatureDecl));
+  Consumer->HandleTranslationUnit(S.getASTContext());
 }
 
 } // namespace hlsl

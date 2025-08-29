@@ -1296,6 +1296,9 @@ public:
 
 void HLSLFrontendAction::ExecuteAction() {
   // Pre-requisites to invoke
+  if (getCurrentFileKind().getLanguage() != Language::HLSL)
+    return WrapperFrontendAction::ExecuteAction();
+
   CompilerInstance &CI = getCompilerInstance();
   if (!CI.hasASTContext() || !CI.hasPreprocessor())
     return WrapperFrontendAction::ExecuteAction();
@@ -1328,6 +1331,9 @@ void HLSLFrontendAction::ExecuteAction() {
 
   Preprocessor &PP = CI.getPreprocessor();
   PP.addPPCallbacks(std::move(MacroCallback));
+
+  if (IsRootSignatureTarget)
+    return clang::hlsl::HandleRootSignatureTarget(S);
 
   // Invoke as normal
   WrapperFrontendAction::ExecuteAction();
