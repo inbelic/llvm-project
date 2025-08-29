@@ -1309,10 +1309,22 @@ void HLSLFrontendAction::ExecuteAction() {
                   /*CodeCompleteConsumer=*/nullptr);
   Sema &S = CI.getSema();
 
+  auto &TargetInfo = CI.getASTContext().getTargetInfo();
+  bool IsRootSignatureTarget =
+      TargetInfo.getTriple().getEnvironment() == llvm::Triple::RootSignature;
+
   // Register HLSL specific callbacks
   auto LangOpts = CI.getLangOpts();
+  bool HasRootSignatureDefine = LangOpts.HLSLRootSigOverride != "";
+
+  if (IsRootSignatureTarget && HasRootSignatureDefine)
+    CI.getDiagnostics().Report(diag::warn_hlsl_ignored_rootsig_define);
+
+  StringRef RootSigName = IsRootSignatureTarget
+                              ? TargetInfo.getTargetOpts().HLSLEntry
+                              : LangOpts.HLSLRootSigOverride;
   auto MacroCallback = std::make_unique<InjectRootSignatureCallback>(
-      S, LangOpts.HLSLRootSigOverride, LangOpts.HLSLRootSigVer);
+      S, RootSigName, LangOpts.HLSLRootSigVer);
 
   Preprocessor &PP = CI.getPreprocessor();
   PP.addPPCallbacks(std::move(MacroCallback));

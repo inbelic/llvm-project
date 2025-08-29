@@ -1744,6 +1744,9 @@ def LegacyConstantRegisterBinding : DiagGroup<"legacy-constant-register-binding"
 // Warning for HLSL Attributes on Statement.
 def HLSLAttributeStatement : DiagGroup<"attribute-statement">;
 
+// Warning for HLSL Driver Options.
+def HLSLDriverOpts : DiagGroup<"hlsl-driver-options">;
+
 // Warnings and notes related to const_var_decl_type attribute checks
 def ReadOnlyPlacementChecks : DiagGroup<"read-only-types">;
 

@@ -397,6 +397,10 @@ def warn_hlsl_langstd_minimal :
           "recommend using %1 instead">,
   InGroup<HLSLDXCCompat>;
 
+def warn_hlsl_ignored_rootsig_define :
+  Warning<"option to override root signature is ignored in a rootsig target">,
+  InGroup<HLSLDXCCompat>;
+
 // ClangIR frontend errors
 def err_cir_to_cir_transform_failed : Error<
     "CIR-to-CIR transformation failed">, DefaultFatal;
