@@ -324,7 +324,8 @@ bool DataScalarizerVisitor::visitGetElementPtrInst(GetElementPtrInst &GEPI) {
     if (isa<ArrayType>(AllocatedType) &&
         AllocatedType != GOp->getResultElementType())
       NewGEPType = AllocatedType;
-  }
+  } else
+    return false; // Only GEPs into an alloca or global variable are considered
 
   // Defer changing i8 GEP types until dxil-flatten-arrays
   if (OrigGEPType->isIntegerTy(8))
@@ -351,11 +352,14 @@ bool DataScalarizerVisitor::visitGetElementPtrInst(GetElementPtrInst &GEPI) {
     MissingDims++;
 
     ArrayType *ArrType = dyn_cast<ArrayType>(SubType);
-    if (!ArrType)
+    if (!ArrType) {
+      assert(SubType == GEPArrType && "GEP uses a strange sub-type of alloca/global variable");
       break;
+    }
 
     SubType = ArrType->getElementType();
   }
+
 
   bool NeedsTransform = OrigOperand != PtrOperand ||
                         OrigGEPType != NewGEPType || MissingDims != 0;
