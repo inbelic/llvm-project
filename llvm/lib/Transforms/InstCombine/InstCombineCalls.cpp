@@ -158,7 +158,8 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
   uint64_t Size = MemOpLength->getLimitedValue();
   assert(Size && "0-sized memory transferring should be removed already.");
 
-  if (Size > 8 || (Size&(Size-1)))
+  // This is the correct check when targeting DXIL with SM < 6.2
+  if (Size > 4 || (Size&(Size-1)))
     return nullptr;  // If not 1/2/4/8 bytes, exit.
 
   // If it is an atomic and alignment is less than the size then we will
@@ -178,6 +179,11 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
 
   Value *Src = MI->getArgOperand(1);
   Value *Dest = MI->getArgOperand(0);
+  // The introduction of an i64 load occurs here because the src type of the
+  // memcpy is equivalent to loading an i64. The easy fix here is to return
+  // a nullptr above in the size check if Size > 4 instead of Size > 8 when
+  // we are targeting DXIL with SM <= 6.2. However, access to the TTI is
+  // explicitly disallowed for that use here. See InstCombiner:52.
   LoadInst *L = Builder.CreateLoad(IntType, Src);
   // Alignment from the mem intrinsic will be better, so use it.
   L->setAlignment(*CopySrcAlign);
