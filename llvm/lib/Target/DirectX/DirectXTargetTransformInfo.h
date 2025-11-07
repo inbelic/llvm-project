@@ -39,6 +39,8 @@ public:
                                           unsigned ScalarOpdIdx) const override;
   bool isTargetIntrinsicWithOverloadTypeAtArg(Intrinsic::ID ID,
                                               int OpdIdx) const override;
+  bool isLegalMemCpyToLoadSize(uint64_t Size) const override;
+
 };
 } // namespace llvm
 

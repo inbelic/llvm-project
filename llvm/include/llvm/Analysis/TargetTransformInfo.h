@@ -822,6 +822,9 @@ public:
   /// Return true if the target supports masked load.
   LLVM_ABI bool isLegalMaskedLoad(Type *DataType, Align Alignment,
                                   unsigned AddressSpace) const;
+  /// Return true if the target supports converting a memcpy to a load given
+  // its size.
+  LLVM_ABI bool isLegalMemCpyToLoadSize(uint64_t Size) const;
 
   /// Return true if the target supports nontemporal store.
   LLVM_ABI bool isLegalNTStore(Type *DataType, Align Alignment) const;

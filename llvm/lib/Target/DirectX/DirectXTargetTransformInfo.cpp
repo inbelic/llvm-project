@@ -69,3 +69,8 @@ bool DirectXTTIImpl::isTargetIntrinsicTriviallyScalarizable(
     return false;
   }
 }
+
+bool DirectXTTIImpl::isLegalMemCpyToLoadSize(uint64_t Size) const {
+  bool AllowInt64 = false; // Based on lowering shader model verison
+  return BaseT::isLegalMemCpyToLoadSize(Size) && (AllowInt64 || Size < 4);
+}

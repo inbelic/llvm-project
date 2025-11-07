@@ -477,6 +477,10 @@ bool TargetTransformInfo::isLegalMaskedLoad(Type *DataType, Align Alignment,
   return TTIImpl->isLegalMaskedLoad(DataType, Alignment, AddressSpace);
 }
 
+bool TargetTransformInfo::isLegalMemCpyToLoadSize(uint64_t Size) const {
+  return TTIImpl->isLegalMemCpyToLoadSize(Size);
+}
+
 bool TargetTransformInfo::isLegalNTStore(Type *DataType,
                                          Align Alignment) const {
   return TTIImpl->isLegalNTStore(DataType, Alignment);

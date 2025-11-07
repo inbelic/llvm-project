@@ -318,6 +318,11 @@ public:
     return false;
   }
 
+  virtual bool isLegalMemCpyToLoadSize(uint64_t Size) const {
+    // If not 1/2/4/8 bytes, return false.
+    return !(Size > 8 || (Size&(Size-1)));
+  }
+
   virtual bool isLegalNTStore(Type *DataType, Align Alignment) const {
     // By default, assume nontemporal memory stores are available for stores
     // that are aligned and have a size that is a power of 2.
