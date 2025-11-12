@@ -531,6 +531,10 @@ static std::string computeDXILDataLayout(const Triple &T) {
   // TODO: We need to align vectors on the element size generally, but for now
   // we hard code this for 3-element 32- and 64-bit vectors as a workaround.
   // See https://github.com/llvm/llvm-project/issues/123968
+  VersionTuple SMVersion = T.getOSVersion();
+  if (SMVersion <= VersionTuple(6,2)) // int 64 (n64) is not natively supported
+    return "e-m:e-p:32:32-i1:32-i8:8-i16:16-i32:32-i64:64-f16:16-"
+           "f32:32-f64:64-n8:16:32-v48:16:16-v96:32:32-v192:64:64";
   return "e-m:e-p:32:32-i1:32-i8:8-i16:16-i32:32-i64:64-f16:16-"
          "f32:32-f64:64-n8:16:32:64-v48:16:16-v96:32:32-v192:64:64";
 }
