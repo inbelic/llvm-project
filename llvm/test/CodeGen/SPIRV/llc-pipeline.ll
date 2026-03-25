@@ -40,7 +40,7 @@
 ; SPIRV-O0-NEXT:    FunctionPass Manager
 ; SPIRV-O0-NEXT:      Lower invoke and unwind, for unwindless code generators
 ; SPIRV-O0-NEXT:      Remove unreachable blocks from the CFG
-; SPIRV-O0-NEXT:      SPIRV strip convergent intrinsics
+; SPIRV-O0-NEXT:      Strip convergence intrinsics and operand bundles
 ; SPIRV-O0-NEXT:    SPIRV Legalize Implicit Binding
 ; SPIRV-O0-NEXT:    SPIRV Legalize Zero-Size Arrays
 ; SPIRV-O0-NEXT:    SPIRV CBuffer Access
@@ -154,7 +154,7 @@
 ; SPIRV-Opt-NEXT:      CodeGen Prepare
 ; SPIRV-Opt-NEXT:      Lower invoke and unwind, for unwindless code generators
 ; SPIRV-Opt-NEXT:      Remove unreachable blocks from the CFG
-; SPIRV-Opt-NEXT:      SPIRV strip convergent intrinsics
+; SPIRV-Opt-NEXT:      Strip convergence intrinsics and operand bundles
 ; SPIRV-Opt-NEXT:    SPIRV Legalize Implicit Binding
 ; SPIRV-Opt-NEXT:    SPIRV Legalize Zero-Size Arrays
 ; SPIRV-Opt-NEXT:    SPIRV CBuffer Access

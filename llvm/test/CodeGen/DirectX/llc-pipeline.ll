@@ -39,11 +39,14 @@
 ; CHECK-NEXT:     DXIL Legalizer
 ; CHECK-NEXT:   DXIL Resource Binding Analysis
 ; CHECK-NEXT:   DXIL Resource Implicit Binding
+; CHECK-NEXT:   FunctionPass Manager
+; CHECK-NEXT:     Strip convergence intrinsics and operand bundles
 ; CHECK-NEXT:   DXIL Resources Analysis
 ; CHECK-NEXT:   DXIL Module Metadata analysis
 ; CHECK-NEXT:   DXIL Shader Flag Analysis
 ; CHECK-NEXT:   DXIL Root Signature Analysis
 ; CHECK-NEXT:   DXIL Translate Metadata
+; CHECK-NEXT:   DXIL Resource Binding Analysis
 ; CHECK-NEXT:   DXIL Post Optimization Validation
 ; CHECK-NEXT:   DXIL Op Lowering
 ; CHECK-NEXT:   DXIL Prepare Module
