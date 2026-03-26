@@ -716,8 +716,7 @@ void AggExprEmitter::EmitArrayInit(Address DestPtr, llvm::ArrayType *AType,
     currentElement->addIncoming(element, entryBB);
 
     if (CGF.CGM.shouldEmitConvergenceTokens())
-      CGF.ConvergenceTokenStack.push_back(
-          CGF.emitConvergenceLoopToken(bodyBB));
+      CGF.ConvergenceTokenStack.push_back(CGF.emitConvergenceLoopToken(bodyBB));
 
     // Emit the actual filler expression.
     {
@@ -1995,8 +1994,7 @@ void AggExprEmitter::VisitArrayInitLoopExpr(const ArrayInitLoopExpr *E,
       Builder.CreateInBoundsGEP(llvmElementType, begin, index);
 
   if (CGF.CGM.shouldEmitConvergenceTokens())
-    CGF.ConvergenceTokenStack.push_back(
-        CGF.emitConvergenceLoopToken(bodyBB));
+    CGF.ConvergenceTokenStack.push_back(CGF.emitConvergenceLoopToken(bodyBB));
 
   // Prepare for a cleanup.
   QualType::DestructionKind dtorKind = elementType.isDestructedType();
