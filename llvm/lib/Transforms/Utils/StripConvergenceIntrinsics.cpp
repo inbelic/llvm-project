@@ -12,9 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Utils/StripConvergenceIntrinsics.h"
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/InstIterator.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/InitializePasses.h"
@@ -24,45 +22,37 @@
 using namespace llvm;
 
 static bool stripConvergenceIntrinsics(Function &F) {
-  DenseSet<Instruction *> ToRemove;
+  bool Changed = false;
 
-  auto CleanupIntrinsic = [&](IntrinsicInst *II) {
-    if (II->getIntrinsicID() != Intrinsic::experimental_convergence_entry &&
-        II->getIntrinsicID() != Intrinsic::experimental_convergence_loop &&
-        II->getIntrinsicID() != Intrinsic::experimental_convergence_anchor)
-      return false;
-
-    II->replaceAllUsesWith(UndefValue::get(II->getType()));
-    ToRemove.insert(II);
-    return true;
-  };
-
-  auto CleanupCall = [&](CallInst *CI) {
-    auto OB = CI->getOperandBundle(LLVMContext::OB_convergencectrl);
-    if (!OB.has_value())
-      return;
-
-    auto *NewCall = CallBase::removeOperandBundle(
-        CI, LLVMContext::OB_convergencectrl, CI->getIterator());
-    NewCall->copyMetadata(*CI);
-    CI->replaceAllUsesWith(NewCall);
-    ToRemove.insert(CI);
-  };
-
-  for (BasicBlock &BB : F) {
-    for (Instruction &I : BB) {
-      if (auto *II = dyn_cast<IntrinsicInst>(&I))
-        if (CleanupIntrinsic(II))
+  // Iterate in reverse order so that uses of convergence tokens are removed
+  // before the convergence intrinsics that define them.
+  for (BasicBlock &BB : reverse(F)) {
+    for (Instruction &I : make_early_inc_range(reverse(BB))) {
+      if (auto *II = dyn_cast<IntrinsicInst>(&I)) {
+        if (II->getIntrinsicID() == Intrinsic::experimental_convergence_entry ||
+            II->getIntrinsicID() == Intrinsic::experimental_convergence_loop ||
+            II->getIntrinsicID() ==
+                Intrinsic::experimental_convergence_anchor) {
+          II->eraseFromParent();
+          Changed = true;
           continue;
-      if (auto *CI = dyn_cast<CallInst>(&I))
-        CleanupCall(CI);
+        }
+      }
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        auto OB = CI->getOperandBundle(LLVMContext::OB_convergencectrl);
+        if (!OB.has_value())
+          continue;
+        auto *NewCall = CallBase::removeOperandBundle(
+            CI, LLVMContext::OB_convergencectrl, CI->getIterator());
+        NewCall->copyMetadata(*CI);
+        CI->replaceAllUsesWith(NewCall);
+        CI->eraseFromParent();
+        Changed = true;
+      }
     }
   }
 
-  for (Instruction *I : ToRemove)
-    I->eraseFromParent();
-
-  return ToRemove.size() != 0;
+  return Changed;
 }
 
 PreservedAnalyses
