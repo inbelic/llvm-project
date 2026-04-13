@@ -18,7 +18,6 @@
 #include "Decomposer.h"
 #include "Utils.h"
 #include "flang/Common/idioms.h"
-#include "flang/Evaluate/expression.h"
 #include "flang/Evaluate/tools.h"
 #include "flang/Evaluate/type.h"
 #include "flang/Lower/Bridge.h"
@@ -981,6 +980,20 @@ getImplicitMapTypeAndKind(fir::FirOpBuilder &firOpBuilder,
     mlir::Operation *op = mod.lookupSymbol(converter.mangleName(sym));
     auto declareTargetOp =
         llvm::dyn_cast_if_present<mlir::omp::DeclareTargetInterface>(op);
+
+    // Double check it's not part of a common block, and that the common block
+    // isn't marked declare target.
+    if (!declareTargetOp) {
+      if (const semantics::Symbol *common =
+              semantics::FindCommonBlockContaining(sym.GetUltimate())) {
+        mlir::Operation *commonOp =
+            mod.lookupSymbol(converter.mangleName(*common));
+        declareTargetOp =
+            llvm::dyn_cast_if_present<mlir::omp::DeclareTargetInterface>(
+                commonOp);
+      }
+    }
+
     if (declareTargetOp && declareTargetOp.isDeclareTarget()) {
       if (declareTargetOp.getDeclareTargetCaptureClause() ==
               mlir::omp::DeclareTargetCaptureClause::link &&
@@ -1415,6 +1428,16 @@ static void genBodyOfTargetOp(
   if (HostEvalInfo *hostEvalInfo = getHostEvalInfoStackTop(converter))
     hostEvalInfo->bindOperands(argIface.getHostEvalBlockArgs());
 
+  // If we map a common block using it's symbol e.g. map(tofrom: /common_block/)
+  // and accessing its members within the target region, there is a large
+  // chance we will end up with uses external to the region accessing the common
+  // resolve these, we do so by generating new common block member accesses
+  // within the region, binding them to the member symbol for the scope of the
+  // region so that subsequent code generation within the region will utilise
+  // our new member accesses we have created.
+  genIntermediateCommonBlockAccessors(
+      converter, currentLocation, argIface.getMapBlockArgs(), args.map.syms);
+
   // Check if cloning the bounds introduced any dependency on the outer region.
   // If so, then either clone them as well if they are MemoryEffectFree, or else
   // copy them to a new temporary and add them to the map and block_argument
@@ -1440,16 +1463,6 @@ static void genBodyOfTargetOp(
 
   // Create the insertion point after the marker.
   firOpBuilder.setInsertionPointAfter(undefMarker.getDefiningOp());
-
-  // If we map a common block using it's symbol e.g. map(tofrom: /common_block/)
-  // and accessing its members within the target region, there is a large
-  // chance we will end up with uses external to the region accessing the common
-  // resolve these, we do so by generating new common block member accesses
-  // within the region, binding them to the member symbol for the scope of the
-  // region so that subsequent code generation within the region will utilise
-  // our new member accesses we have created.
-  genIntermediateCommonBlockAccessors(
-      converter, currentLocation, argIface.getMapBlockArgs(), args.map.syms);
 
   if (ConstructQueue::const_iterator next = std::next(item);
       next != queue.end()) {
@@ -1841,7 +1854,7 @@ static void genTaskgroupClauses(
 static void genTaskloopClauses(
     lower::AbstractConverter &converter, semantics::SemanticsContext &semaCtx,
     lower::StatementContext &stmtCtx, const List<Clause> &clauses,
-    mlir::Location loc, mlir::omp::TaskloopOperands &clauseOps,
+    mlir::Location loc, mlir::omp::TaskloopContextOperands &clauseOps,
     llvm::SmallVectorImpl<const semantics::Symbol *> &reductionSyms,
     llvm::SmallVectorImpl<const semantics::Symbol *> &inReductionSyms) {
 
@@ -3261,12 +3274,12 @@ genStandaloneSimd(lower::AbstractConverter &converter, lower::SymMap &symTable,
   return simdOp;
 }
 
-static mlir::omp::TaskloopOp genStandaloneTaskloop(
+static mlir::omp::TaskloopContextOp genStandaloneTaskloop(
     lower::AbstractConverter &converter, lower::SymMap &symTable,
     lower::StatementContext &stmtCtx, semantics::SemanticsContext &semaCtx,
     lower::pft::Evaluation &eval, mlir::Location loc,
     const ConstructQueue &queue, ConstructQueue::const_iterator item) {
-  mlir::omp::TaskloopOperands taskloopClauseOps;
+  mlir::omp::TaskloopContextOperands taskloopClauseOps;
   llvm::SmallVector<const semantics::Symbol *> reductionSyms;
   llvm::SmallVector<const semantics::Symbol *> inReductionSyms;
 
@@ -3290,13 +3303,26 @@ static mlir::omp::TaskloopOp genStandaloneTaskloop(
   taskloopArgs.inReduction.syms = inReductionSyms;
   taskloopArgs.inReduction.vars = taskloopClauseOps.inReductionVars;
 
-  auto taskLoopOp = genWrapperOp<mlir::omp::TaskloopOp>(
-      converter, loc, taskloopClauseOps, taskloopArgs);
+  fir::FirOpBuilder &firOpBuilder = converter.getFirOpBuilder();
+  auto taskLoopContextOp = mlir::omp::TaskloopContextOp::create(
+      firOpBuilder, loc, taskloopClauseOps);
+  // Create entry block with arguments.
+  genEntryBlock(firOpBuilder, taskloopArgs, taskLoopContextOp.getRegion());
+
+  mlir::OpBuilder::InsertionGuard guard(firOpBuilder);
+  firOpBuilder.setInsertionPointToStart(&taskLoopContextOp.getRegion().front());
+  mlir::omp::TaskloopWrapperOperands wrapperClauseOps;
+  EntryBlockArgs wrapperEntryBlockArgs;
+  auto taskLoopWrapperOp = genWrapperOp<mlir::omp::TaskloopWrapperOp>(
+      converter, loc, wrapperClauseOps, wrapperEntryBlockArgs);
 
   genLoopNestOp(converter, symTable, semaCtx, eval, loc, queue, item,
-                loopNestClauseOps, iv, {{taskLoopOp, taskloopArgs}},
+                loopNestClauseOps, iv, {{taskLoopContextOp, taskloopArgs}},
                 llvm::omp::Directive::OMPD_taskloop, dsp);
-  return taskLoopOp;
+
+  firOpBuilder.setInsertionPointAfter(taskLoopWrapperOp);
+  mlir::omp::TerminatorOp::create(firOpBuilder, loc);
+  return taskLoopContextOp;
 }
 
 //===----------------------------------------------------------------------===//
@@ -3591,7 +3617,7 @@ static mlir::omp::WsloopOp genCompositeDoSimd(
   return wsloopOp;
 }
 
-static mlir::omp::TaskloopOp genCompositeTaskloopSimd(
+static mlir::omp::TaskloopWrapperOp genCompositeTaskloopSimd(
     lower::AbstractConverter &converter, lower::SymMap &symTable,
     lower::StatementContext &stmtCtx, semantics::SemanticsContext &semaCtx,
     lower::pft::Evaluation &eval, mlir::Location loc,
@@ -3837,27 +3863,14 @@ genOMP(lower::AbstractConverter &converter, lower::SymMap &symTable,
 
 static ReductionProcessor::GenCombinerCBTy processReductionCombiner(
     lower::AbstractConverter &converter, lower::SymMap &symTable,
-    semantics::SemanticsContext &semaCtx, const clause::Combiner &combiner,
-    const parser::OmpStylizedInstance &parserInst) {
-  // Extract the typed assignment from the parser-level instance, if
-  // the combiner is an assignment statement (as opposed to a call).
-  const evaluate::Assignment *assign = nullptr;
-  const auto &instance =
-      std::get<parser::OmpStylizedInstance::Instance>(parserInst.t);
-  if (const auto *assignStmt =
-          std::get_if<parser::AssignmentStmt>(&instance.u)) {
-    if (auto *wrapper = assignStmt->typedAssignment.get())
-      if (wrapper->v)
-        assign = &*wrapper->v;
-  }
+    semantics::SemanticsContext &semaCtx, const clause::Combiner &combiner) {
   ReductionProcessor::GenCombinerCBTy genCombinerCB;
   const StylizedInstance &inst = combiner.v.front();
   semantics::SomeExpr evalExpr = std::get<StylizedInstance::Instance>(inst.t);
 
-  genCombinerCB = [&, evalExpr, assign](fir::FirOpBuilder &builder,
-                                        mlir::Location loc, mlir::Type type,
-                                        mlir::Value lhs, mlir::Value rhs,
-                                        bool isByRef) {
+  genCombinerCB = [&, evalExpr](fir::FirOpBuilder &builder, mlir::Location loc,
+                                mlir::Type type, mlir::Value lhs,
+                                mlir::Value rhs, bool isByRef) {
     lower::SymMapScope scope(symTable);
     mlir::Value ompOutVar;
     for (const Object &object : std::get<StylizedInstance::Variables>(inst.t)) {
@@ -3892,44 +3905,6 @@ static ReductionProcessor::GenCombinerCBTy processReductionCombiner(
       symTable.addVariableDefinition(*object.sym(), declareOp);
     }
 
-    // For derived types with a typed assignment available, use
-    // hlfir::AssignOp or user-defined assignment directly instead of
-    // trying to convert the expression to a value (which doesn't work
-    // for record types).  Only take this path when the assignment RHS
-    // itself is a derived type -- i.e. the combiner assigns to the whole
-    // derived-type variable (e.g. omp_out = mycombine(omp_out, omp_in)).
-    // When the combiner assigns to a component (e.g. omp_out%x = ...),
-    // the RHS is a scalar intrinsic type and the existing convertExprToValue
-    // path handles it correctly.
-    bool rhsIsDerived =
-        assign && assign->rhs.GetType() &&
-        assign->rhs.GetType()->category() == common::TypeCategory::Derived;
-    if (rhsIsDerived && isByRef &&
-        mlir::isa<fir::RecordType>(fir::unwrapRefType(lhs.getType()))) {
-      lower::StatementContext stmtCtx;
-      hlfir::Entity lhsEntity{ompOutVar};
-      hlfir::Entity rhsEntity = lower::convertExprToHLFIR(
-          loc, converter, assign->rhs, symTable, stmtCtx);
-      common::visit(
-          common::visitors{
-              [&](const evaluate::Assignment::Intrinsic &) {
-                hlfir::AssignOp::create(builder, loc, rhsEntity, lhsEntity);
-              },
-              [&](const evaluate::ProcedureRef &procRef) {
-                lower::convertUserDefinedAssignmentToHLFIR(
-                    loc, converter, procRef, lhsEntity, rhsEntity, symTable);
-              },
-              [&](const auto &) {
-                llvm_unreachable(
-                    "Unexpected assignment type in reduction combiner");
-              },
-          },
-          assign->u);
-      stmtCtx.finalizeAndPop();
-      mlir::omp::YieldOp::create(builder, loc, lhs);
-      return;
-    }
-
     lower::StatementContext stmtCtx;
     mlir::Value result = common::visit(
         common::visitors{
@@ -3937,10 +3912,6 @@ static ReductionProcessor::GenCombinerCBTy processReductionCombiner(
               convertCallToHLFIR(loc, converter, procRef, std::nullopt,
                                  symTable, stmtCtx);
               auto outVal = fir::LoadOp::create(builder, loc, ompOutVar);
-              if (isByRef) {
-                fir::StoreOp::create(builder, loc, outVal, lhs);
-                return mlir::Value{};
-              }
               return outVal;
             },
             [&](const auto &expr) -> mlir::Value {
@@ -3955,35 +3926,12 @@ static ReductionProcessor::GenCombinerCBTy processReductionCombiner(
                 if (expectedType == refType.getElementType())
                   exprResult = fir::LoadOp::create(builder, loc, exprResult);
               }
-              // For component-level derived-type combiners (e.g.
-              // omp_out%x = omp_out%x + omp_in%x), the assignment was
-              // not performed during expression lowering since
-              // convertExprToValue only evaluates the RHS value.
-              // The result type won't match the reduction variable type.
-              // Use the typed assignment LHS to store to the correct
-              // component, then skip the whole-variable store.
-              if (isByRef &&
-                  exprResult.getType() != fir::unwrapRefType(lhs.getType())) {
-                if (assign) {
-                  lower::StatementContext assignCtx;
-                  hlfir::Entity lhsEntity = lower::convertExprToHLFIR(
-                      loc, converter, assign->lhs, symTable, assignCtx);
-                  hlfir::AssignOp::create(builder, loc, exprResult, lhsEntity);
-                  assignCtx.finalizeAndPop();
-                } else {
-                  fir::StoreOp::create(builder, loc, exprResult, ompOutVar);
-                }
-                return mlir::Value{};
-              }
-              if (isByRef) {
-                fir::StoreOp::create(builder, loc, exprResult, lhs);
-                return mlir::Value{};
-              }
               return exprResult;
             }},
         evalExpr.u);
     stmtCtx.finalizeAndPop();
     if (isByRef) {
+      fir::StoreOp::create(builder, loc, result, lhs);
       mlir::omp::YieldOp::create(builder, loc, lhs);
     } else {
       mlir::omp::YieldOp::create(builder, loc, result);
@@ -4076,83 +4024,41 @@ static void genOMP(lower::AbstractConverter &converter, lower::SymMap &symTable,
   const auto &identifier =
       std::get<parser::OmpReductionIdentifier>(specifier.t);
 
-  // Convert the parser-level reduction identifier to the clause-level
-  // representation, then use ReductionProcessor to derive the canonical name.
-  clause::ReductionOperator redOp =
-      clause::makeReductionOperator(identifier, semaCtx);
-
-  // Get the parser-level combiner expression so we can pass each
-  // parser::OmpStylizedInstance to processReductionCombiner.
-  // The combiner expression's instances correspond 1:1 to typeNameList entries.
-  const auto *combinerExpr = parser::omp::GetCombinerExpr(specifier);
-  assert(combinerExpr && "Expecting combiner expression");
-  auto parserInstIt = combinerExpr->v.begin();
+  std::string reductionNameStr = Fortran::common::visit(
+      common::visitors{
+          [](const parser::ProcedureDesignator &pd) -> std::string {
+            return std::get<parser::Name>(pd.u).ToString();
+          },
+          [](const parser::DefinedOperator &defOp) -> std::string {
+            return Fortran::common::visit(
+                common::visitors{
+                    [](const parser::DefinedOpName &opName) -> std::string {
+                      return opName.v.ToString();
+                    },
+                    [](parser::DefinedOperator::IntrinsicOperator intrOp)
+                        -> std::string {
+                      return std::string(
+                          parser::DefinedOperator::EnumToString(intrOp));
+                    },
+                },
+                defOp.u);
+          },
+      },
+      identifier.u);
 
   for (const auto &typeSpec : typeNameList.v) {
     (void)typeSpec; // Currently unused
-
-    assert(parserInstIt != combinerExpr->v.end() &&
-           "Mismatched combiner instance count");
-    const parser::OmpStylizedInstance &parserInst = *parserInstIt++;
-
     mlir::Type reductionType = getReductionType(converter, specifier);
-    bool isByRef = ReductionProcessor::doReductionByRef(reductionType);
-    // Compute the canonical reduction name the same way
-    // processReductionArguments does.
-    std::string reductionNameStr = Fortran::common::visit(
-        common::visitors{
-            [&](const clause::DefinedOperator &defOp) -> std::string {
-              return Fortran::common::visit(
-                  common::visitors{
-                      [&](const clause::DefinedOperator::IntrinsicOperator
-                              &intrOp) -> std::string {
-                        ReductionProcessor::ReductionIdentifier redId =
-                            ReductionProcessor::getReductionType(intrOp);
-                        return ReductionProcessor::getReductionName(
-                            redId, converter.getFirOpBuilder().getKindMap(),
-                            reductionType, isByRef);
-                      },
-                      [&](const clause::DefinedOperator::DefinedOpName &opName)
-                          -> std::string {
-                        return opName.v.sym()->name().ToString();
-                      },
-                  },
-                  defOp.u);
-            },
-            [&](const clause::ProcedureDesignator &pd) -> std::string {
-              return pd.v.sym()->name().ToString();
-            },
-        },
-        redOp.u);
-
     ReductionProcessor::GenCombinerCBTy genCombinerCB =
-        processReductionCombiner(converter, symTable, semaCtx, combiner,
-                                 parserInst);
+        processReductionCombiner(converter, symTable, semaCtx, combiner);
     ReductionProcessor::GenInitValueCBTy genInitValueCB;
     ClauseProcessor cp(converter, semaCtx, clauses);
     cp.processInitializer(symTable, genInitValueCB);
-    mlir::Type redType =
-        isByRef
-            ? static_cast<mlir::Type>(fir::ReferenceType::get(reductionType))
-            : reductionType;
-
-    // Get the omp_out symbol from the combiner for finalization checks
-    // in populateByRefInitAndCleanupRegions.
-    const semantics::Symbol *reductionSym = nullptr;
-    const auto &declList =
-        std::get<std::list<parser::OmpStylizedDeclaration>>(parserInst.t);
-    for (const auto &decl : declList) {
-      const auto &name = std::get<parser::ObjectName>(decl.var.t);
-      if (name.ToString() == "omp_out") {
-        reductionSym = name.symbol;
-        break;
-      }
-    }
-
+    bool isByRef = ReductionProcessor::doReductionByRef(reductionType);
     ReductionProcessor::createDeclareReductionHelper<
         mlir::omp::DeclareReductionOp>(
-        converter, reductionNameStr, redType, converter.getCurrentLocation(),
-        isByRef, genCombinerCB, genInitValueCB, reductionSym);
+        converter, reductionNameStr, reductionType,
+        converter.getCurrentLocation(), isByRef, genCombinerCB, genInitValueCB);
   }
 }
 
