@@ -112,6 +112,7 @@ public:
 
   FunctionPass *createTargetRegisterAllocator(bool) override { return nullptr; }
   void addCodeGenPrepare() override {
+    addPass(createStripConvergenceIntrinsicsPass());
     addPass(createDXILFinalizeLinkageLegacyPass());
     addPass(createGlobalDCEPass());
     addPass(createDXILMemIntrinsicsLegacyPass());
@@ -127,7 +128,6 @@ public:
     addPass(createDeadStoreEliminationPass());
     addPass(createDXILLegalizeLegacyPass());
     addPass(createDXILResourceImplicitBindingLegacyPass());
-    addPass(createStripConvergenceIntrinsicsPass());
     addPass(createDXILTranslateMetadataLegacyPass());
     addPass(createDXILPostOptimizationValidationLegacyPass());
     addPass(createDXILOpLoweringLegacyPass());
