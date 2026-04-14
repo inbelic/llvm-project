@@ -13,6 +13,7 @@
 
 #include "llvm/Transforms/Utils/StripConvergenceIntrinsics.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/InitializePasses.h"
@@ -22,35 +23,42 @@
 using namespace llvm;
 
 static bool stripConvergenceIntrinsics(Function &F) {
+  SmallVector<IntrinsicInst *> ConvergenceIntrinsics;
   bool Changed = false;
 
-  // Iterate in reverse order so that uses of convergence tokens are removed
-  // before the convergence intrinsics that define them.
-  for (BasicBlock &BB : reverse(F)) {
-    for (Instruction &I : make_early_inc_range(reverse(BB))) {
-      if (auto *II = dyn_cast<IntrinsicInst>(&I)) {
-        if (II->getIntrinsicID() == Intrinsic::experimental_convergence_entry ||
-            II->getIntrinsicID() == Intrinsic::experimental_convergence_loop ||
-            II->getIntrinsicID() ==
-                Intrinsic::experimental_convergence_anchor) {
-          II->eraseFromParent();
-          Changed = true;
-          continue;
-        }
-      }
-      if (auto *CI = dyn_cast<CallInst>(&I)) {
-        auto OB = CI->getOperandBundle(LLVMContext::OB_convergencectrl);
-        if (!OB.has_value())
-          continue;
+  for (BasicBlock &BB : F) {
+    for (Instruction &I : make_early_inc_range(BB)) {
+      auto *CI = dyn_cast<CallInst>(&I);
+      if (!CI)
+        continue;
+
+      // Strip a convergencectrl operand bundle if present. Note that
+      // convergence intrinsics (e.g. convergence.loop) may use a
+      // convergencectrl bundle.
+      if (CI->getOperandBundle(LLVMContext::OB_convergencectrl)) {
         auto *NewCall = CallBase::removeOperandBundle(
             CI, LLVMContext::OB_convergencectrl, CI->getIterator());
         NewCall->copyMetadata(*CI);
         CI->replaceAllUsesWith(NewCall);
         CI->eraseFromParent();
+        CI = cast<CallInst>(NewCall);
         Changed = true;
       }
+
+      // Collect convergence intrinsics for deferred removal.
+      if (auto *II = dyn_cast<IntrinsicInst>(CI))
+        if (II->getIntrinsicID() == Intrinsic::experimental_convergence_entry ||
+            II->getIntrinsicID() == Intrinsic::experimental_convergence_loop ||
+            II->getIntrinsicID() == Intrinsic::experimental_convergence_anchor)
+          ConvergenceIntrinsics.push_back(II);
     }
   }
+
+  // Erase all convergence intrinsics now that convergence tokens are no
+  // longer in use.
+  for (IntrinsicInst *II : ConvergenceIntrinsics)
+    II->eraseFromParent();
+  Changed |= !ConvergenceIntrinsics.empty();
 
   return Changed;
 }
