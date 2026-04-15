@@ -48,6 +48,27 @@ entry:
   ret void
 }
 
+; This ensures that when the use of a token is defined before the call that
+; creates the token, we are still able to strip them as expected.
+define void @reversed_block_order() convergent {
+; CHECK-LABEL: define void @reversed_block_order()
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    br label %[[B:.*]]
+; CHECK:       [[A:.*]]:
+; CHECK-NEXT:    call void @convergent_callee()
+; CHECK-NEXT:    ret void
+; CHECK:      [[B]]:
+; CHECK-NEXT:    br label %[[A]]
+entry:
+ br label %B
+A:
+ call void @convergent_callee() [ "convergencectrl"(token %tok) ]
+ ret void
+B:
+ %tok = call token @llvm.experimental.convergence.anchor()
+ br label %A
+}
+
 ; Declarations may remain but should have no uses in function bodies.
 ; CHECK-LABEL: declare void @convergent_callee
 
