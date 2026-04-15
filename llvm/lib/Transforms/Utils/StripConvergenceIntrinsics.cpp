@@ -67,7 +67,9 @@ PreservedAnalyses
 StripConvergenceIntrinsicsPass::run(Function &F, FunctionAnalysisManager &) {
   if (!stripConvergenceIntrinsics(F))
     return PreservedAnalyses::all();
-  return PreservedAnalyses::none();
+  PreservedAnalyses PA;
+  PA.preserveSet<CFGAnalyses>();
+  return PA;
 }
 
 namespace {
