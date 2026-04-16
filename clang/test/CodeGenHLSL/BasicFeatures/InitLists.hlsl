@@ -1181,6 +1181,7 @@ void case27(CustomResource a) {
 // CHECK-LABEL: define hidden void @_Z6case289TwoFloats(
 // CHECK-SAME: ptr noundef byval([[STRUCT_TWOFLOATS:%.*]]) align 1 [[TF:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  [[ENTRY:.*:]]
+// CHECK-NEXT:    %[[#C_ENTRY:]] = call token @llvm.experimental.convergence.entry()
 // CHECK-NEXT:    [[TI:%.*]] = alloca [[STRUCT_TWOINTS:%.*]], align 1
 // CHECK-NEXT:    [[REF_TMP:%.*]] = alloca [[STRUCT_TWOINTS]], align 1
 // CHECK-NEXT:    [[AGG_TEMP:%.*]] = alloca [[STRUCT_TWOFLOATS]], align 1
@@ -1225,6 +1226,7 @@ void case28(TwoFloats TF) {
 // CHECK-LABEL: define hidden void @_Z6case2910FourFloats(
 // CHECK-SAME: ptr noundef byval([[STRUCT_FOURFLOATS:%.*]]) align 1 [[FF:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  [[ENTRY:.*:]]
+// CHECK-NEXT:    %[[#C_ENTRY:]] = call token @llvm.experimental.convergence.entry()
 // CHECK-NEXT:    [[INTS:%.*]] = alloca [2 x i32], align 4
 // CHECK-NEXT:    [[REF_TMP:%.*]] = alloca [2 x i32], align 4
 // CHECK-NEXT:    [[AGG_TEMP:%.*]] = alloca [[STRUCT_FOURFLOATS]], align 1
@@ -1272,6 +1274,7 @@ void case29(FourFloats FF) {
 // CHECK-LABEL: define hidden void @_Z6case30v(
 // CHECK-SAME: ) #[[ATTR0]] {
 // CHECK-NEXT:  [[ENTRY:.*:]]
+// CHECK-NEXT:    %[[#C_ENTRY:]] = call token @llvm.experimental.convergence.entry()
 // CHECK-NEXT:    [[ARR:%.*]] = alloca [4 x float], align 4
 // CHECK-NEXT:    [[TI:%.*]] = alloca [[STRUCT_TWOINTS:%.*]], align 1
 // CHECK-NEXT:    [[REF_TMP:%.*]] = alloca [[STRUCT_TWOINTS]], align 1
@@ -1323,6 +1326,7 @@ void case30() {
 // CHECK-LABEL: define hidden void @_Z6case31v(
 // CHECK-SAME: ) #[[ATTR0]] {
 // CHECK-NEXT:  [[ENTRY:.*:]]
+// CHECK-NEXT:    %[[#C_ENTRY:]] = call token @llvm.experimental.convergence.entry()
 // CHECK-NEXT:    [[F:%.*]] = alloca float, align 4
 // CHECK-NEXT:    [[SB:%.*]] = alloca [[STRUCT_SLICYBITS:%.*]], align 1
 // CHECK-NEXT:    store float 1.000000e+00, ptr [[F]], align 4
