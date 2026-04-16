@@ -66,7 +66,6 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSPIRVTarget() {
   initializeSPIRVEmitNonSemanticDIPass(PR);
   initializeSPIRVPrepareFunctionsPass(PR);
   initializeSPIRVPrepareGlobalsPass(PR);
-  initializeSPIRVStripConvergentIntrinsicsPass(PR);
   initializeSPIRVCtorDtorLoweringLegacyPass(PR);
 }
 
@@ -223,9 +222,13 @@ void SPIRVPassConfig::addISelPrepare() {
     // 5. Reduce the amount of variables required by pushing some operations
     // back to virtual registers.
     addPass(createPromoteMemoryToRegisterPass());
+  } else {
+    // Canonicalize loops so they have a single latch and preheader.
+    // This enables OpLoopMerge emission for non-shader targets.
+    addPass(createLoopSimplifyPass());
   }
   SPIRVTargetMachine &TM = getTM<SPIRVTargetMachine>();
-  addPass(createSPIRVStripConvergenceIntrinsicsPass());
+  addPass(createStripConvergenceIntrinsicsPass());
   addPass(createSPIRVLegalizeImplicitBindingPass());
   addPass(createSPIRVLegalizeZeroSizeArraysPass(TM));
   addPass(createSPIRVCBufferAccessLegacyPass());
