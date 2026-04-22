@@ -406,9 +406,10 @@ legalizeGetHighLowi64Bytes(Instruction &I,
   return false;
 }
 
-static bool resolveUnreachableSwitchDefault(
-    Instruction &I, SmallVectorImpl<Instruction *> &ToRemove,
-    DenseMap<Value *, Value *> &) {
+static bool
+resolveUnreachableSwitchDefault(Instruction &I,
+                                SmallVectorImpl<Instruction *> &ToRemove,
+                                DenseMap<Value *, Value *> &) {
   auto *SI = dyn_cast<SwitchInst>(&I);
   if (!SI || SI->getNumCases() == 0)
     return false;
@@ -443,8 +444,7 @@ static bool resolveUnreachableSwitchDefault(
   }
 
   BasicBlock *NewDefault =
-      CommonSuccessor ? CommonSuccessor
-                      : SI->case_begin()->getCaseSuccessor();
+      CommonSuccessor ? CommonSuccessor : SI->case_begin()->getCaseSuccessor();
 
   BasicBlock *SwitchBB = SI->getParent();
   SI->setDefaultDest(NewDefault);
