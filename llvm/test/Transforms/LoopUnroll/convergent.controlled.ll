@@ -555,6 +555,64 @@ exit:
   ret i32 0
 }
 
+; A convergence token defined in the loop is used outside the loop, but only
+; in a dead branch (block terminated by unreachable). This should not prevent
+; unrolling.
+define i32 @extended_loop_dead_branch(i32 %n) {
+; CHECK-LABEL: @extended_loop_dead_branch(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[TMP0:%.*]] = freeze i32 [[N:%.*]]
+; CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[TMP0]], -1
+; CHECK-NEXT:    [[XTRAITER:%.*]] = and i32 [[TMP0]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = icmp ult i32 [[TMP1]], 1
+; CHECK-NEXT:    br i1 [[TMP2]], label [[L3_EPIL_PREHEADER:%.*]], label [[ENTRY_NEW:%.*]]
+; CHECK:       entry.new:
+; CHECK-NEXT:    [[UNROLL_ITER:%.*]] = sub i32 [[TMP0]], [[XTRAITER]]
+; CHECK-NEXT:    br label [[L3:%.*]], !llvm.loop [[LOOP4]]
+; CHECK:       l3:
+; CHECK-NEXT:    [[X_0:%.*]] = phi i32 [ 0, [[ENTRY_NEW]] ], [ [[INC_1:%.*]], [[L3]] ]
+; CHECK-NEXT:    [[NITER:%.*]] = phi i32 [ 0, [[ENTRY_NEW]] ], [ [[NITER_NEXT_1:%.*]], [[L3]] ]
+; CHECK-NEXT:    [[TOK_LOOP:%.*]] = call token @llvm.experimental.convergence.anchor()
+; CHECK-NEXT:    call void @f() [ "convergencectrl"(token [[TOK_LOOP]]) ]
+; CHECK-NEXT:    [[TOK_LOOP_1:%.*]] = call token @llvm.experimental.convergence.anchor()
+; CHECK-NEXT:    call void @f() [ "convergencectrl"(token [[TOK_LOOP_1]]) ]
+; CHECK-NEXT:    [[INC_1]] = add nsw i32 [[X_0]], 2
+; CHECK-NEXT:    [[NITER_NEXT_1]] = add i32 [[NITER]], 2
+; CHECK-NEXT:    [[NITER_NCMP_1:%.*]] = icmp eq i32 [[NITER_NEXT_1]], [[UNROLL_ITER]]
+; CHECK-NEXT:    br i1 [[NITER_NCMP_1]], label [[EXIT_UNR_LCSSA:%.*]], label [[L3]], !llvm.loop [[LOOP10:![0-9]+]]
+; CHECK:       exit.unr-lcssa:
+; CHECK-NEXT:    [[LCMP_MOD:%.*]] = icmp ne i32 [[XTRAITER]], 0
+; CHECK-NEXT:    br i1 [[LCMP_MOD]], label [[L3_EPIL_PREHEADER]], label [[EXIT:%.*]]
+; CHECK:       l3.epil.preheader:
+; CHECK-NEXT:    [[LCMP_MOD1:%.*]] = icmp ne i32 [[XTRAITER]], 0
+; CHECK-NEXT:    call void @llvm.assume(i1 [[LCMP_MOD1]])
+; CHECK-NEXT:    br label [[L3_EPIL:%.*]]
+; CHECK:       l3.epil:
+; CHECK-NEXT:    [[TOK_LOOP_EPIL:%.*]] = call token @llvm.experimental.convergence.anchor()
+; CHECK-NEXT:    call void @f() [ "convergencectrl"(token [[TOK_LOOP_EPIL]]) ]
+; CHECK-NEXT:    br label [[EXIT]]
+; CHECK:       exit:
+; CHECK-NEXT:    ret i32 0
+;
+entry:
+  br label %l3, !llvm.loop !1
+
+l3:
+  %x.0 = phi i32 [ 0, %entry ], [ %inc, %l3 ]
+  %tok.loop = call token @llvm.experimental.convergence.anchor()
+  call void @f() [ "convergencectrl"(token %tok.loop) ]
+  %inc = add nsw i32 %x.0, 1
+  %exitcond = icmp eq i32 %inc, %n
+  br i1 %exitcond, label %exit, label %l3, !llvm.loop !1
+
+exit:
+  ret i32 0
+
+dead:
+  call void @f() [ "convergencectrl"(token %tok.loop) ]
+  unreachable
+}
+
 declare token @llvm.experimental.convergence.anchor()
 declare token @llvm.experimental.convergence.loop()
 

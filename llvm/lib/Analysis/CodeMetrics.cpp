@@ -16,6 +16,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/InstructionCost.h"
@@ -118,7 +119,12 @@ static bool extendsConvergenceOutsideLoop(const Instruction &I, const Loop *L) {
   if (!isa<ConvergenceControlInst>(I))
     return false;
   for (const auto *U : I.users()) {
-    if (!L->contains(cast<Instruction>(U)))
+    const auto *UserInst = cast<Instruction>(U);
+    // Ignore users in dead branches, identified by blocks terminated with
+    // unreachable.
+    if (isa<UnreachableInst>(UserInst->getParent()->getTerminator()))
+      continue;
+    if (!L->contains(UserInst))
       return true;
   }
   return false;
