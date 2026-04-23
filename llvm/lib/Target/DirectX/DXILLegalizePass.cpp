@@ -429,8 +429,8 @@ resolveUnreachableSwitchDefault(Instruction &I,
   BasicBlock *CommonSuccessor = nullptr;
   for (auto &Case : SI->cases()) {
     BasicBlock *CaseBB = Case.getCaseSuccessor();
-    auto *BI = dyn_cast<BranchInst>(CaseBB->getTerminator());
-    if (!BI || !BI->isUnconditional()) {
+    auto *BI = dyn_cast<UncondBrInst>(CaseBB->getTerminator());
+    if (!BI) {
       CommonSuccessor = nullptr;
       break;
     }
