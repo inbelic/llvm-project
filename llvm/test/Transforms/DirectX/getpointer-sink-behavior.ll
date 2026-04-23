@@ -2,7 +2,7 @@
 ; RUN: opt -passes=sink -S %s | FileCheck %s
 
 ; Verify that dx.resource.getpointer can be sunk into a branch where it is
-; only used, now that it is no longer marked convergent.
+; only used.
 
 define void @can_sink_into_branch(i1 %cond) {
 ; CHECK-LABEL: define void @can_sink_into_branch(
