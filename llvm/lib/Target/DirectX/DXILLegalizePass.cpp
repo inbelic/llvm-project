@@ -416,8 +416,8 @@ resolveUnreachableSwitchDefault(Instruction &I,
 
   BasicBlock *DefaultBB = SI->getDefaultDest();
 
-  // Check if the default destination only contains an unreachable instruction.
-  if (DefaultBB->size() != 1 ||
+  // Check if the default destination ends with an unreachable instruction.
+  if (DefaultBB->size() == 0 ||
       !isa<UnreachableInst>(DefaultBB->getTerminator()))
     return false;
 
