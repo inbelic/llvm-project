@@ -91,6 +91,7 @@ F f : register(t0) : register(u20) : register(s3);
 
 // CHECK: define internal void @main()()
 // CHECK-NEXT: entry:
+// CHECK-NEXT: %[[#C_ENTRY:]] = call token @llvm.experimental.convergence.entry()
 [numthreads(1, 1, 1)]
 void main() {
 // CHECK-NEXT: %i = alloca i32
@@ -126,7 +127,7 @@ void main() {
 // CHECK-NEXT: store float %[[VAL2]], ptr %a
   float a = f.SrvBuf[0];
 
-// CHECK: [[PTR7:.*]]= call {{.*}} ptr @hlsl::RWBuffer<float>::operator[](unsigned int)(ptr {{.*}} @f.a.Buf, i32 noundef 0)
-// CHECK: store float %{{.*}}, ptr %call6
+// CHECK: %[[PTR7:.*]] = call {{.*}} ptr @hlsl::RWBuffer<float>::operator[](unsigned int)(ptr {{.*}} @f.a.Buf, i32 noundef 0)
+// CHECK: store float %{{.*}}, ptr %[[PTR7]]
   f.a.Buf[0] = (float)i + a;
 }
