@@ -311,6 +311,16 @@ Attribute Changes in Clang
   foreign language personality with a given function. Note that this does not
   perform any ABI validation for the personality routine.
 
+- The ``__attribute__((flatten))`` attribute behavior has changed to match
+  GCC. Previously, Clang only inlined direct callees of the attributed
+  function. Now, all calls are inlined transitively, including calls
+  introduced by inlining. Calls that cannot be inlined are left as-is:
+  this includes callees marked ``noinline``, callees with incompatible ABI
+  attributes (e.g. SME), callees without a visible definition, and
+  recursive calls where a function already appears in the inlining chain.
+  Flatten also works across ThinLTO module boundaries when callee
+  definitions are available.
+
 - The :doc:`ThreadSafetyAnalysis` attributes ``guarded_by`` and
   ``pt_guarded_by`` now accept multiple capability arguments with refined
   access semantics: *writing* requires all listed capabilities to be held
@@ -554,6 +564,7 @@ Bug Fixes to C++ Support
 - We no longer consider conversion operators when copy-initializing from the same type. This was non
   conforming and could lead to recursive constraint satisfaction checking. (#GH149443)
 - Fixed a crash in Itanium C++ name mangling for a lambda in a local class field initializer inside a constructor/destructor. (#GH176395)
+- Fixed crashes in Itanium C++ name mangling for lambdas with trailing requires-clauses involving requires-expressions. (#GH100774) (#GH123854)
 
 Bug Fixes to AST Handling
 ^^^^^^^^^^^^^^^^^^^^^^^^^
