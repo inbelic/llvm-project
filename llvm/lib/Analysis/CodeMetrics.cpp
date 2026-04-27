@@ -113,6 +113,28 @@ void CodeMetrics::collectEphemeralValues(
   completeEphemeralValues(Visited, Worklist, EphValues);
 }
 
+/// Check if a block is dead. A block is determined dead if it is terminated by
+/// unreachable and all predecessors are statically known condiational branches
+/// to not go to the branch.
+static bool isDeadBlock(const BasicBlock *BB) {
+  if (!isa<UnreachableInst>(BB->getTerminator()))
+    return false;
+  for (const BasicBlock *Pred : predecessors(BB)) {
+    auto *CondBr = dyn_cast<CondBrInst>(Pred->getTerminator());
+    if (!CondBr)
+      return false;
+    auto *Cond = dyn_cast<ConstantInt>(CondBr->getCondition());
+    if (!Cond)
+      return false;
+    // Check that the dead block is on the not-taken edge.
+    BasicBlock *TakenSucc =
+        Cond->isOne() ? CondBr->getSuccessor(0) : CondBr->getSuccessor(1);
+    if (TakenSucc == BB)
+      return false;
+  }
+  return true;
+}
+
 static bool extendsConvergenceOutsideLoop(const Instruction &I, const Loop *L) {
   if (!L)
     return false;
@@ -120,9 +142,9 @@ static bool extendsConvergenceOutsideLoop(const Instruction &I, const Loop *L) {
     return false;
   for (const auto *U : I.users()) {
     const auto *UserInst = cast<Instruction>(U);
-    // Ignore users in dead branches, identified by blocks terminated with
-    // unreachable.
-    if (isa<UnreachableInst>(UserInst->getParent()->getTerminator()))
+    // Ignore users in dead blocks. These can be of a fully unrolled inner loop
+    // where the exit condition was folded.
+    if (isDeadBlock(UserInst->getParent()))
       continue;
     if (!L->contains(UserInst))
       return true;
