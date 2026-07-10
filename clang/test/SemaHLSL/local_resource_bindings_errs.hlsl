@@ -47,3 +47,24 @@ void static_conditional_assignment(uint idx) {
     StaticOut = cond ? Out0 : Out1;
     StaticOut[idx] = In[idx];
 }
+
+void transitive_assignment(uint idx) {
+    RWStructuredBuffer<uint> A = Out0; // expected-note {{variable 'A' is declared here}}
+    RWStructuredBuffer<uint> B = Out1;
+    // expected-warning@+1 {{assignment of 'B' to local resource 'A' is not to the same unique global resource}}
+    A = B;
+    A[idx] = In[idx];
+}
+
+void pingpong_swap(uint idx, uint n) {
+    RWStructuredBuffer<uint> src = Out0; // expected-note {{variable 'src' is declared here}}
+    RWStructuredBuffer<uint> dst = Out1; // expected-note {{variable 'dst' is declared here}}
+    for (uint i = 0; i < n; ++i) {
+        dst[idx] = src[idx];
+        RWStructuredBuffer<uint> tmp = src;
+        // expected-warning@+1 {{assignment of 'dst' to local resource 'src' is not to the same unique global resource}}
+        src = dst;
+        // expected-warning@+1 {{assignment of 'tmp' to local resource 'dst' is not to the same unique global resource}}
+        dst = tmp;
+    }
+}

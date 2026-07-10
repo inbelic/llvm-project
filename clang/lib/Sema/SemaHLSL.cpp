@@ -5826,6 +5826,16 @@ std::optional<const DeclBindingInfo *> SemaHLSL::inferGlobalBinding(Expr *E) {
 
       if (const auto *AttrResType =
               HLSLAttributedResourceType::findHandleTypeOnResource(Ty)) {
+        // A local (or static) resource variable does not have a global
+        // binding of its own; it refers to whatever resource was most
+        // recently assigned to it.
+        if (!VD->hasGlobalStorage() || VD->getStorageClass() == SC_Static) {
+          auto It = Assigns.find(VD);
+          if (It != Assigns.end())
+            return It->second;
+          return nullptr;
+        }
+
         ResourceClass RC = AttrResType->getAttrs().ResourceClass;
         return Bindings.getDeclBindingInfo(VD, RC);
       }

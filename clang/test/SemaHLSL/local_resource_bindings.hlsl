@@ -60,3 +60,10 @@ void conditional_result_in_same(uint idx) {
     RWStructuredBuffer<uint> Out = cond ? Out0 : Out0;
 	Out[idx] = In[idx];
 }
+
+void transitive_assignment_unique(uint idx) {
+    RWStructuredBuffer<uint> A = Out0;
+    RWStructuredBuffer<uint> B = Out0;
+    A = B;
+    A[idx] = In[idx];
+}
