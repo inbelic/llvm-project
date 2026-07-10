@@ -716,6 +716,27 @@ replaceHandleWithIndices(Instruction *Ptr, IntrinsicInst *OldHandle,
   DeadInsts.insert(Ptr);
 }
 
+// Try to resolve the simple case when InstCombine sunk a load inst. This is
+// not preventable, but can be simply undone.
+static void hoistLoad(LoadInst *LI, PHINode *Phi,
+                      SmallSetVector<Instruction *, 16> &DeadInsts) {
+  unsigned NumEdges = Phi->getNumIncomingValues();
+
+  PHINode *NewPhi = PHINode::Create(LI->getType(), NumEdges, LI->getName(),
+                                    Phi->getIterator());
+  for (unsigned Idx = 0; Idx < NumEdges; ++Idx) {
+    BasicBlock *BB = Phi->getIncomingBlock(Idx);
+    auto *NewLoad = cast<LoadInst>(LI->clone());
+    NewLoad->setOperand(0, Phi->getIncomingValue(Idx));
+    NewLoad->insertBefore(BB->getTerminator()->getIterator());
+    NewPhi->addIncoming(NewLoad, BB);
+  }
+  LI->replaceAllUsesWith(NewPhi);
+
+  DeadInsts.insert(Phi);
+  DeadInsts.insert(LI);
+}
+
 // Try to legalize dx.resource.handlefrom.*.binding and dx.resource.getpointer
 // calls with their respective index values and propagate the index values to
 // be used at resource access.
@@ -742,12 +763,19 @@ static bool legalizeResourceHandles(Function &F, DXILResourceTypeMap &DRTM) {
           SameGlobalBinding &=
               (B == getHandleIntrinsicBinding(Handles[Idx], DRTM));
 
-        if (!SameGlobalBinding) {
-          diagnoseNonUniqueResourceAccess(&I, Handles);
+
+        if (SameGlobalBinding) {
+          replaceHandleWithIndices(PtrOp, Handles[0], DeadInsts);
           continue;
         }
 
-        replaceHandleWithIndices(PtrOp, Handles[0], DeadInsts);
+        if (auto *LI = dyn_cast<LoadInst>(&I))
+          if (auto *Phi = dyn_cast<PHINode>(LI->getPointerOperand())) {
+            hoistLoad(LI, Phi, DeadInsts);
+            continue;
+          }
+
+        diagnoseNonUniqueResourceAccess(&I, Handles);
       }
     }
   }
