@@ -561,10 +561,13 @@ static const std::array<Intrinsic::ID, 2> HandleIntrins = {
 
 static SmallVector<IntrinsicInst *> collectUsedHandles(Value *Ptr) {
   SmallVector<Value *> Worklist = {Ptr};
+  SmallSetVector<Value *, 16> Visited;
   SmallVector<IntrinsicInst *> Handles;
 
   while (!Worklist.empty()) {
     Value *X = Worklist.pop_back_val();
+    if (!Visited.insert(X))
+      continue;
 
     if (!X->getType()->isPointerTy() && !X->getType()->isTargetExtTy())
       return {}; // Early exit on store/load into non-resource
