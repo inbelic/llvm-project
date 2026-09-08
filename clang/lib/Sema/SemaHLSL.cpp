@@ -1127,7 +1127,7 @@ void SemaHLSL::diagnoseSemanticStageMismatch(
     ArrayRef<SemanticStageInfo> Allowed) {
   SmallVector<SemanticStageInfo, 8> CombinedAllowed;
   for (const SemanticStageInfo &Case : Allowed) {
-    auto It = llvm::find_if(CombinedAllowed, [&](SemanticStageInfo Info) {
+    auto It = llvm::find_if(CombinedAllowed, [&](SemanticStageInfo &Info) {
       return Info.Stage == Case.Stage;
     });
     if (It == CombinedAllowed.end()) {
@@ -1148,7 +1148,7 @@ void SemaHLSL::diagnoseSemanticStageMismatch(
     SmallVector<std::string, 8> ValidCases;
     llvm::transform(
         CombinedAllowed, std::back_inserter(ValidCases),
-        [](SemanticStageInfo Case) {
+        [](SemanticStageInfo &Case) {
           SmallVector<std::string, 2> ValidType;
           if (Case.AllowedIOTypesMask & IOType::In)
             ValidType.push_back("input");
@@ -1175,7 +1175,7 @@ void SemaHLSL::diagnoseSemanticStageMismatch(
   SmallVector<StringRef, 8> StageStrings;
   llvm::transform(
       CombinedAllowed, std::back_inserter(StageStrings),
-      [](SemanticStageInfo Case) {
+      [](SemanticStageInfo &Case) {
         return StringRef(
             HLSLShaderAttr::ConvertEnvironmentTypeToStr(Case.Stage));
       });

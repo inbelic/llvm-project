@@ -33,8 +33,9 @@ namespace hlsl {
 
 // Definitions of the in-memory data layout structures
 
-// Bitmask denoting whether a semantic is an input, output, or a value that is
-// constant across a patch (hull/domain shaders) or primitive (mesh shaders).
+// Bitmask denoting whether a semantic is an input, output, inout or a value
+// that is constant across a patch (hull/domain shaders) or primitive
+// (mesh shaders).
 enum IOType {
   In = 0b001,
   Out = 0b010,
