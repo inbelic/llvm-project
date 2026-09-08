@@ -1551,8 +1551,8 @@ llvm::Value *CGHLSLRuntime::handleScalarSemanticLoad(
   llvm::hlsl::SemanticInterpretation Interpretation =
       llvm::hlsl::getInterpretationKind(SemanticKind, ShaderAttr->getType(),
                                         llvm::hlsl::IOType::In);
-  if (Interpretation == llvm::hlsl::SemanticInterpretation::Invalid)
-    llvm_unreachable("invalid semantic should have been diagnosed by Sema");
+  assert(Interpretation != llvm::hlsl::SemanticInterpretation::Invalid &&
+         "invalid semantic should have been diagnosed by Sema");
   if (Interpretation == llvm::hlsl::SemanticInterpretation::Arbitrary)
     return emitUserSemanticLoad(B, FD, Type, Decl, Semantic, Index, Signature);
   return emitSystemSemanticLoad(B, Type, Decl, Semantic, SemanticKind, Index,
