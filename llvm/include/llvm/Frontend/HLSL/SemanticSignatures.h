@@ -15,6 +15,7 @@
 #define LLVM_FRONTEND_HLSL_SEMANTICSIGNATURES_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/DXContainer.h"
@@ -31,12 +32,14 @@ class MDNode;
 
 namespace hlsl {
 
+LLVM_ENABLE_BITMASK_ENUMS_IN_NAMESPACE();
+
 // Definitions of the in-memory data layout structures
 
 // Bitmask denoting whether a semantic is an input, output, inout or a value
 // that is constant across a patch (hull/domain shaders) or primitive
 // (mesh shaders).
-enum IOType {
+enum class IOType {
   In = 0b001,
   Out = 0b010,
   InOut = 0b011,

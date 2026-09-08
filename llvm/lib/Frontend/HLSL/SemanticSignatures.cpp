@@ -60,7 +60,7 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
   switch (SemanticKind) {
   case dxbc::PSV::SemanticKind::Arbitrary: {
     static constexpr IOType OutOrPatchConstant =
-        static_cast<IOType>(IOType::Out | IOType::PatchConstantOrPrimitive);
+        IOType::Out | IOType::PatchConstantOrPrimitive;
     static constexpr SemanticStageInfo Stages[] = {
         {Triple::Vertex, IOType::InOut, SemanticInterpretation::Arbitrary},
         {Triple::Geometry, IOType::InOut, SemanticInterpretation::Arbitrary},
@@ -139,7 +139,7 @@ SemanticInterpretation
 hlsl::getInterpretationKind(dxbc::PSV::SemanticKind SemanticKind,
                             Triple::EnvironmentType ShaderStage, IOType IOTy) {
   for (const SemanticStageInfo &Info : getAvailableStages(SemanticKind))
-    if (Info.Stage == ShaderStage && (Info.AllowedIOTypesMask & IOTy))
+    if (Info.Stage == ShaderStage && any(Info.AllowedIOTypesMask & IOTy))
       return Info.Interpretation;
   return SemanticInterpretation::Invalid;
 }

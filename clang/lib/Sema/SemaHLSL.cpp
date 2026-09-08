@@ -919,7 +919,7 @@ bool SemaHLSL::determineActiveSemanticOnScalar(FunctionDecl *FD,
   unsigned Location = ActiveSemantic.Index.value_or(0);
 
   if (!isVkPipelineBuiltin(getASTContext(), FD, A,
-                           SC.CurrentIOType & IOType::In)) {
+                           any(SC.CurrentIOType & IOType::In))) {
     bool HasVkLocation = false;
     if (auto *A = D->getAttr<HLSLVkLocationAttr>()) {
       HasVkLocation = true;
@@ -1138,19 +1138,19 @@ void SemaHLSL::diagnoseSemanticStageMismatch(
     return;
   }
 
-  auto AllowedIOTypes = It->AllowedIOTypesMask;
+  IOType AllowedIOTypes = It->AllowedIOTypesMask;
   if (!(AllowedIOTypes & CurrentIOType)) {
     StringRef CurrentIOTypeName = "patch constant or primitive";
-    if (CurrentIOType & IOType::In)
+    if (any(CurrentIOType & IOType::In))
       CurrentIOTypeName = "input";
-    else if (CurrentIOType & IOType::Out)
+    else if (any(CurrentIOType & IOType::Out))
       CurrentIOTypeName = "output";
     SmallVector<std::string, 3> ValidType;
-    if (AllowedIOTypes & IOType::In)
+    if (any(AllowedIOTypes & IOType::In))
       ValidType.push_back("input");
-    if (AllowedIOTypes & IOType::Out)
+    if (any(AllowedIOTypes & IOType::Out))
       ValidType.push_back("output");
-    if (AllowedIOTypes & IOType::PatchConstantOrPrimitive)
+    if (any(AllowedIOTypes & IOType::PatchConstantOrPrimitive))
       ValidType.push_back("patch constant or primitive");
     Diag(A->getLoc(), diag::err_hlsl_semantic_unsupported_iotype_for_stage)
         << A->getAttrName() << llvm::Triple::getEnvironmentTypeName(Stage)
