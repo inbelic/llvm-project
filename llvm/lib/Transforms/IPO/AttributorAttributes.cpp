@@ -763,15 +763,6 @@ template <> struct DenseMapInfo<AA::RangeTy> {
   }
 };
 
-/// Helper for AA::PointerInfo::Access DenseMap/Set usage ignoring everythign
-/// but the instruction
-struct AccessAsInstructionInfo : DenseMapInfo<Instruction *> {
-  using Base = DenseMapInfo<Instruction *>;
-  using Access = AAPointerInfo::Access;
-  static unsigned getHashValue(const Access &A);
-  static bool isEqual(const Access &LHS, const Access &RHS);
-};
-
 } // namespace llvm
 
 /// A type to track pointer/struct usage and accesses for AAPointerInfo.
@@ -9254,19 +9245,6 @@ struct AAValueConstantRangeImpl : AAValueConstantRange {
     }
 
     return true;
-  }
-
-  /// See AAValueConstantRange::getKnownConstantRange(..).
-  ConstantRange
-  getKnownConstantRange(Attributor &A,
-                        const Instruction *CtxI = nullptr) const override {
-    if (!isValidCtxInstructionForOutsideAnalysis(A, CtxI,
-                                                 /* AllowAACtxI */ false))
-      return getKnown();
-
-    ConstantRange LVIR = getConstantRangeFromLVI(A, CtxI);
-    ConstantRange SCEVR = getConstantRangeFromSCEV(A, CtxI);
-    return getKnown().intersectWith(SCEVR).intersectWith(LVIR);
   }
 
   /// See AAValueConstantRange::getAssumedConstantRange(..).
