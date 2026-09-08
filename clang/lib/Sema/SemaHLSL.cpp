@@ -1087,8 +1087,7 @@ void SemaHLSL::checkSemanticAnnotation(
   llvm::hlsl::SemanticInterpretation Interpretation =
       llvm::hlsl::getInterpretationKind(Kind, ST, SC.CurrentIOType);
   if (Interpretation == llvm::hlsl::SemanticInterpretation::Invalid)
-    diagnoseSemanticStageMismatch(SemanticAttr, ST, SC.CurrentIOType,
-                                  llvm::hlsl::getAvailableStages(Kind));
+    diagnoseSemanticStageMismatch(SemanticAttr, ST, SC.CurrentIOType, Kind);
 
   switch (Kind) {
   case SemanticKind::DispatchThreadID:
@@ -1124,51 +1123,39 @@ void SemaHLSL::diagnoseAttrStageMismatch(
 
 void SemaHLSL::diagnoseSemanticStageMismatch(
     const Attr *A, llvm::Triple::EnvironmentType Stage, IOType CurrentIOType,
-    ArrayRef<SemanticStageInfo> Allowed) {
-  SmallVector<SemanticStageInfo, 8> CombinedAllowed;
-  for (const SemanticStageInfo &Case : Allowed) {
-    auto It = llvm::find_if(CombinedAllowed, [&](SemanticStageInfo &Info) {
-      return Info.Stage == Case.Stage;
-    });
-    if (It == CombinedAllowed.end()) {
-      CombinedAllowed.push_back(Case);
-      continue;
-    }
-    It->AllowedIOTypesMask =
-        static_cast<IOType>(It->AllowedIOTypesMask | Case.AllowedIOTypesMask);
+    SemanticKind Kind) {
+
+  ArrayRef<SemanticStageInfo> Allowed = llvm::hlsl::getAvailableStages(Kind);
+  auto It = llvm::find_if(Allowed, [&Stage](const SemanticStageInfo &Info) {
+    return Info.Stage == Stage;
+  });
+
+  // The semantic is not available in this shader stage at all.
+  if (It == Allowed.end()) {
+    Diag(A->getLoc(), diag::err_hlsl_semantic_unsupported_iotype_for_stage)
+        << A->getAttrName() << llvm::Triple::getEnvironmentTypeName(Stage)
+        << /*AvailableInStage=*/false;
+    return;
   }
 
-  for (auto &Case : CombinedAllowed) {
-    if (Case.Stage != Stage)
-      continue;
-
-    if (CurrentIOType & Case.AllowedIOTypesMask)
-      return;
-
-    SmallVector<std::string, 8> ValidCases;
-    llvm::transform(
-        CombinedAllowed, std::back_inserter(ValidCases),
-        [](SemanticStageInfo &Case) {
-          SmallVector<std::string, 2> ValidType;
-          if (Case.AllowedIOTypesMask & IOType::In)
-            ValidType.push_back("input");
-          if (Case.AllowedIOTypesMask & IOType::Out)
-            ValidType.push_back("output");
-          if (Case.AllowedIOTypesMask & IOType::PatchConstantOrPrimitive)
-            ValidType.push_back("patch constant or primitive");
-          return std::string(
-                     HLSLShaderAttr::ConvertEnvironmentTypeToStr(Case.Stage)) +
-                 " " + join(ValidType, "/");
-        });
+  auto AllowedIOTypes = It->AllowedIOTypesMask;
+  if (!(AllowedIOTypes & CurrentIOType)) {
     StringRef CurrentIOTypeName = "patch constant or primitive";
     if (CurrentIOType & IOType::In)
       CurrentIOTypeName = "input";
     else if (CurrentIOType & IOType::Out)
       CurrentIOTypeName = "output";
+    SmallVector<std::string, 3> ValidType;
+    if (AllowedIOTypes & IOType::In)
+      ValidType.push_back("input");
+    if (AllowedIOTypes & IOType::Out)
+      ValidType.push_back("output");
+    if (AllowedIOTypes & IOType::PatchConstantOrPrimitive)
+      ValidType.push_back("patch constant or primitive");
     Diag(A->getLoc(), diag::err_hlsl_semantic_unsupported_iotype_for_stage)
-        << A->getAttrName() << CurrentIOTypeName
-        << llvm::Triple::getEnvironmentTypeName(Case.Stage)
-        << join(ValidCases, ", ");
+        << A->getAttrName() << llvm::Triple::getEnvironmentTypeName(Stage)
+        << /*AvailableInStage=*/true << CurrentIOTypeName
+        << join(ValidType, ", ");
     return;
   }
 }

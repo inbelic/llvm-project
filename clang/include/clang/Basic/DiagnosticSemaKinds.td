@@ -13682,8 +13682,8 @@ def err_hlsl_init_priority_unsupported : Error<
   "initializer priorities are not supported in HLSL">;
 def err_hlsl_semantic_index_overlap : Error<"semantic index overlap %0">;
 def err_hlsl_semantic_unsupported_iotype_for_stage
-    : Error<"semantic %0 is unsupported in %2 shaders as %1, requires one of "
-            "the following: %3">;
+    : Error<"semantic %0 is not supported %select{in %1 shaders"
+            "|as a %1 shader %3, it is available as an %4}2">;
 def err_hlsl_semantic_partial_explicit_indexing
     : Error<"partial explicit stage input location assignment via "
             "vk::location(X) unsupported">;

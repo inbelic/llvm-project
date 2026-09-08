@@ -334,10 +334,11 @@ private:
       const Attr *A, llvm::Triple::EnvironmentType Stage,
       std::initializer_list<llvm::Triple::EnvironmentType> AllowedStages);
 
-  void diagnoseSemanticStageMismatch(
-      const Attr *A, llvm::Triple::EnvironmentType Stage,
-      llvm::hlsl::IOType CurrentIOType,
-      llvm::ArrayRef<llvm::hlsl::SemanticStageInfo> AllowedStages);
+  void
+  diagnoseSemanticStageMismatch(const Attr *A,
+                                llvm::Triple::EnvironmentType Stage,
+                                llvm::hlsl::IOType CurrentIOType,
+                                llvm::dxbc::PSV::SemanticKind SemanticKind);
 
   void handleGlobalStructOrArrayOfWithResources(VarDecl *VD);
 
