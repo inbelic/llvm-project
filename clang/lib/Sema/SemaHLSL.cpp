@@ -1904,7 +1904,7 @@ void SemaHLSL::handleVkLocationAttr(Decl *D, const ParsedAttr &AL) {
                  HLSLVkLocationAttr(getASTContext(), AL, Location));
 }
 
-bool SemaHLSL::diagnoseInputIDType(QualType T, const ParsedAttr &AL) {
+bool SemaHLSL::diagnoseIndexType(QualType T, const ParsedAttr &AL) {
   const auto *VT = T->getAs<VectorType>();
 
   if (!T->hasUnsignedIntegerRepresentation() ||
@@ -1917,7 +1917,7 @@ bool SemaHLSL::diagnoseInputIDType(QualType T, const ParsedAttr &AL) {
   return true;
 }
 
-bool SemaHLSL::diagnosePositionType(QualType T, const ParsedAttr &AL) {
+bool SemaHLSL::diagnoseFloatType(QualType T, const ParsedAttr &AL) {
   const auto *VT = T->getAs<VectorType>();
   if (!T->hasFloatingRepresentation() || (VT && VT->getNumElements() > 4)) {
     Diag(AL.getLoc(), diag::err_hlsl_attr_invalid_type)
@@ -1948,7 +1948,7 @@ void SemaHLSL::diagnoseSystemSemanticAttr(Decl *D, const ParsedAttr &AL,
   case SemanticKind::DispatchThreadID:
   case SemanticKind::GroupThreadID:
   case SemanticKind::GroupID:
-    diagnoseInputIDType(ValueType, AL);
+    diagnoseIndexType(ValueType, AL);
     [[fallthrough]];
   case SemanticKind::GroupIndex:
     if (IsOutput)
@@ -1958,7 +1958,7 @@ void SemaHLSL::diagnoseSystemSemanticAttr(Decl *D, const ParsedAttr &AL,
     break;
   case SemanticKind::Position:
   case SemanticKind::Target:
-    diagnosePositionType(ValueType, AL);
+    diagnoseFloatType(ValueType, AL);
     break;
   case SemanticKind::VertexID: {
     uint64_t SizeInBits = SemaRef.Context.getTypeSize(ValueType);
