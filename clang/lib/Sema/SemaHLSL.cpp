@@ -1928,8 +1928,9 @@ void SemaHLSL::diagnoseSystemSemanticAttr(Decl *D, const ParsedAttr &AL,
   case SemanticKind::GroupIndex:
     if (IsOutput)
       Diag(AL.getLoc(), diag::err_hlsl_semantic_output_not_supported) << AL;
-    if (Index.has_value())
-      Diag(AL.getLoc(), diag::err_hlsl_semantic_indexing_not_supported) << AL;
+    // Indexing is diagnosed in checkSemanticAnnotation, where the semantic
+    // index of the entry point signature is known. It can be explicit, like
+    // here, or derived when a semantic is spread over an aggregate.
     break;
   case SemanticKind::Position:
   case SemanticKind::Target:
