@@ -145,8 +145,7 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
     return Stages;
   }
   default:
-    llvm_unreachable(
-        "available stages for given semantic kind are not handled yet");
+    return {};
   }
 }
 
