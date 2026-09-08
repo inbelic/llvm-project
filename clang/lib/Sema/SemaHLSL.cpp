@@ -1171,18 +1171,6 @@ void SemaHLSL::diagnoseSemanticStageMismatch(
         << join(ValidCases, ", ");
     return;
   }
-
-  SmallVector<StringRef, 8> StageStrings;
-  llvm::transform(
-      CombinedAllowed, std::back_inserter(StageStrings),
-      [](SemanticStageInfo &Case) {
-        return StringRef(
-            HLSLShaderAttr::ConvertEnvironmentTypeToStr(Case.Stage));
-      });
-
-  Diag(A->getLoc(), diag::err_hlsl_attr_unsupported_in_stage)
-      << A->getAttrName() << llvm::Triple::getEnvironmentTypeName(Stage)
-      << (CombinedAllowed.size() != 1) << join(StageStrings, ", ");
 }
 
 template <CastKind Kind>
