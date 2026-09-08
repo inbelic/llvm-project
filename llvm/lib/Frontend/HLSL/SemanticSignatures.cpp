@@ -14,10 +14,12 @@
 #include "llvm/Frontend/HLSL/SemanticSignatures.h"
 #include "llvm/ADT/Enum.h"
 #include "llvm/ADT/STLForwardCompat.h"
+#include "llvm/ADT/bit.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <cassert>
 
 using namespace llvm;
 using namespace llvm::hlsl;
@@ -151,6 +153,8 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
 SemanticInterpretation
 hlsl::getInterpretationKind(dxbc::PSV::SemanticKind SemanticKind,
                             Triple::EnvironmentType ShaderStage, IOType IOTy) {
+  assert(llvm::has_single_bit(static_cast<unsigned>(IOTy)) &&
+         "a single IOType is expected, not a mask of IOTypes");
   for (const SemanticStageInfo &Info : getAvailableStages(SemanticKind))
     if (Info.Stage == ShaderStage && any(Info.AllowedIOTypesMask & IOTy))
       return Info.Interpretation;
