@@ -1051,6 +1051,8 @@ void SemaHLSL::CheckEntryPoint(FunctionDecl *FD) {
 
   SemaHLSL::SemanticContext InputSC = {};
   InputSC.CurrentIOType = IOType::In;
+  SemaHLSL::SemanticContext OutputSC = {};
+  OutputSC.CurrentIOType = IOType::Out;
 
   for (ParmVarDecl *Param : FD->parameters()) {
     SemanticInfo ActiveSemantic;
@@ -1058,16 +1060,18 @@ void SemaHLSL::CheckEntryPoint(FunctionDecl *FD) {
     if (ActiveSemantic.Semantic)
       ActiveSemantic.Index = ActiveSemantic.Semantic->getSemanticIndex();
 
-    // FIXME: Verify output semantics in parameters.
-    if (!determineActiveSemantic(FD, Param, Param, ActiveSemantic, InputSC)) {
+    // FIXME: An `inout` parameter is part of both signatures, but it is only
+    // verified against the output one here.
+    const auto *MA = Param->getAttr<HLSLParamModifierAttr>();
+    SemanticContext &SC = MA && MA->isAnyOut() ? OutputSC : InputSC;
+
+    if (!determineActiveSemantic(FD, Param, Param, ActiveSemantic, SC)) {
       Diag(Param->getLocation(), diag::note_previous_decl) << Param;
       FD->setInvalidDecl();
     }
   }
 
   SemanticInfo ActiveSemantic;
-  SemaHLSL::SemanticContext OutputSC = {};
-  OutputSC.CurrentIOType = IOType::Out;
   ActiveSemantic.Semantic = FD->getAttr<HLSLParsedSemanticAttr>();
   if (ActiveSemantic.Semantic)
     ActiveSemantic.Index = ActiveSemantic.Semantic->getSemanticIndex();
@@ -1911,26 +1915,18 @@ void SemaHLSL::diagnoseSystemSemanticAttr(Decl *D, const ParsedAttr &AL,
   if (auto *FD = dyn_cast<FunctionDecl>(D))
     ValueType = FD->getReturnType();
 
-  bool IsOutput = false;
-  if (HLSLParamModifierAttr *MA = D->getAttr<HLSLParamModifierAttr>()) {
-    if (MA->isOut()) {
-      IsOutput = true;
+  // `out` and `inout` parameters are passed by reference.
+  if (HLSLParamModifierAttr *MA = D->getAttr<HLSLParamModifierAttr>())
+    if (MA->isAnyOut())
       ValueType = cast<ReferenceType>(ValueType)->getPointeeType();
-    }
-  }
 
   switch (Kind) {
   case SemanticKind::DispatchThreadID:
   case SemanticKind::GroupThreadID:
   case SemanticKind::GroupID:
     diagnoseIndexType(ValueType, AL);
-    [[fallthrough]];
+    break;
   case SemanticKind::GroupIndex:
-    if (IsOutput)
-      Diag(AL.getLoc(), diag::err_hlsl_semantic_output_not_supported) << AL;
-    // Indexing is diagnosed in checkSemanticAnnotation, where the semantic
-    // index of the entry point signature is known. It can be explicit, like
-    // here, or derived when a semantic is spread over an aggregate.
     break;
   case SemanticKind::Position:
   case SemanticKind::Target:
