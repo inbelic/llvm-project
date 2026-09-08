@@ -20,10 +20,8 @@ void geometry(int GI : SV_GroupIndex) {}
 [shader("domain")]
 void domain(int GI : SV_GroupIndex) {}
 
-// expected-error@+2 {{semantic 'SV_GroupIndex' is not supported in amplification shaders}}
 [shader("amplification")][numthreads(32,1,1)]
 void amplification(int GI : SV_GroupIndex) {}
 
-// expected-error@+2 {{semantic 'SV_GroupIndex' is not supported in mesh shaders}}
 [shader("mesh")][numthreads(32,1,1)]
 void mesh(int GI : SV_GroupIndex) {}

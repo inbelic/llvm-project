@@ -76,7 +76,11 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
   case dxbc::PSV::SemanticKind::GroupIndex:
   case dxbc::PSV::SemanticKind::GroupThreadID: {
     static constexpr SemanticStageInfo Stages[] = {
-        {Triple::Compute, IOType::In, SemanticInterpretation::NotAllocated}};
+        {Triple::Compute, IOType::In, SemanticInterpretation::NotAllocated},
+        {Triple::Mesh, IOType::In, SemanticInterpretation::NotAllocated},
+        {Triple::Amplification, IOType::In,
+         SemanticInterpretation::NotAllocated},
+    };
     return Stages;
   }
   case dxbc::PSV::SemanticKind::Target: {
@@ -99,7 +103,16 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
     static constexpr SemanticStageInfo Stages[] = {
         {Triple::Vertex, IOType::In, SemanticInterpretation::Arbitrary},
         {Triple::Vertex, IOType::Out, SemanticInterpretation::SV},
-        {Triple::Pixel, IOType::In, SemanticInterpretation::SV}};
+        {Triple::Hull, IOType::InOut, SemanticInterpretation::SV},
+        {Triple::Hull, IOType::PatchConstantOrPrimitive,
+         SemanticInterpretation::Arbitrary},
+        {Triple::Domain, IOType::InOut, SemanticInterpretation::SV},
+        {Triple::Domain, IOType::PatchConstantOrPrimitive,
+         SemanticInterpretation::Arbitrary},
+        {Triple::Geometry, IOType::InOut, SemanticInterpretation::SV},
+        {Triple::Pixel, IOType::In, SemanticInterpretation::SV},
+        {Triple::Mesh, IOType::Out, SemanticInterpretation::SV},
+    };
     return Stages;
   }
   case dxbc::PSV::SemanticKind::ClipDistance:
