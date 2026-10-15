@@ -468,7 +468,8 @@ static MDNode *emitSignature(LLVMContext &Ctx,
     if (E.UsageMask &&
         (ValidatorVersion.empty() || ValidatorVersion == VersionTuple(0, 0) ||
          ValidatorVersion >= VersionTuple(1, 5)))
-      Props.append({I32(3), I32(E.UsageMask >> E.StartCol)});
+      Props.append(
+          {I32(3), I32(E.UsageMask >> (E.isAllocated() ? E.StartCol : 0))});
     Nodes.push_back(MDNode::get(
         Ctx, {I32(E.SigId), MDString::get(Ctx, E.SemanticName),
               I8(static_cast<uint8_t>(E.CompType)),
@@ -521,6 +522,8 @@ static dxbc::D3DSystemValue getSystemValue(dxbc::PSV::SemanticKind Kind) {
     return dxbc::D3DSystemValue::CullDistance;
   case KindTy::Target:
     return dxbc::D3DSystemValue::Target;
+  case KindTy::Barycentrics:
+    return dxbc::D3DSystemValue::Barycentrics;
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -549,6 +552,8 @@ static StringRef getContainerSemanticName(const SemanticSignatureElement &E) {
     return "SV_CullDistance";
   case Kind::Target:
     return "SV_Target";
+  case Kind::Barycentrics:
+    return "SV_Barycentrics";
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -566,7 +571,8 @@ static void buildSignature(mcdxbc::Signature &Sig,
     for (auto [Row, Index] : enumerate(E.SemanticIndices))
       Sig.addParam(E.GSStream, getContainerSemanticName(E), Index,
                    getSystemValue(E.SemanticKind),
-                   getComponentType(E.CompType, Legacy), E.StartRow + Row, Mask,
+                   getComponentType(E.CompType, Legacy),
+                   E.isAllocated() ? E.StartRow + Row : UnallocatedRow, Mask,
                    ExclusiveMask, E.getMinPrecision(!Native16));
   }
 }
@@ -580,8 +586,11 @@ static void buildPSVElements(SmallVectorImpl<mcdxbc::PSVSignatureElement> &Dest,
     Dest.push_back({E.SemanticKind == dxbc::PSV::SemanticKind::Arbitrary
                         ? E.SemanticName
                         : StringRef(),
-                    E.SemanticIndices, static_cast<uint8_t>(E.StartRow), E.Cols,
-                    E.StartCol, E.isAllocated(), E.SemanticKind,
+                    E.SemanticIndices,
+                    E.isAllocated() ? static_cast<uint8_t>(E.StartRow)
+                                    : uint8_t(0),
+                    E.Cols, E.isAllocated() ? E.StartCol : uint8_t(0),
+                    E.isAllocated(), E.SemanticKind,
                     static_cast<dxbc::PSV::ComponentType>(Type), E.InterpMode,
                     E.DynIndexMask, static_cast<uint8_t>(E.GSStream)});
   }
