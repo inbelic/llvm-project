@@ -22,6 +22,8 @@ static StringRef getInterpretationName(SemanticInterpretation Interpretation) {
     return "Invalid";
   case SemanticInterpretation::NotAllocated:
     return "NotAllocated";
+  case SemanticInterpretation::NotPacked:
+    return "NotPacked";
   case SemanticInterpretation::Arbitrary:
     return "Arbitrary";
   case SemanticInterpretation::SV:
@@ -64,7 +66,8 @@ constexpr SemanticKind SupportedKinds[] = {
     SemanticKind::CullDistance,     SemanticKind::TessFactor,
     SemanticKind::InsideTessFactor, SemanticKind::DispatchThreadID,
     SemanticKind::GroupID,          SemanticKind::GroupIndex,
-    SemanticKind::GroupThreadID,    SemanticKind::InstanceID};
+    SemanticKind::GroupThreadID,    SemanticKind::InstanceID,
+    SemanticKind::Barycentrics};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -97,6 +100,16 @@ TEST(HLSLSemanticStagesTest, StageIOTypesAreDisjoint) {
       }
     }
   }
+}
+
+TEST(HLSLSemanticStagesTest, BarycentricsAreUnpackedPixelInputs) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO : {IOType::In, IOType::Out,
+                      IOType::PatchConstantOrPrimitive})
+      EXPECT_EQ(getInterpretationKind(SemanticKind::Barycentrics, Stage, IO),
+                Stage == Triple::Pixel && IO == IOType::In
+                    ? SemanticInterpretation::NotPacked
+                    : SemanticInterpretation::Invalid);
 }
 
 } // namespace
