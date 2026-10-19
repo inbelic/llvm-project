@@ -104,8 +104,8 @@ TEST(HLSLSemanticStagesTest, StageIOTypesAreDisjoint) {
 
 TEST(HLSLSemanticStagesTest, BarycentricsAreUnpackedPixelInputs) {
   for (Triple::EnvironmentType Stage : AllStages)
-    for (IOType IO : {IOType::In, IOType::Out,
-                      IOType::PatchConstantOrPrimitive})
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive})
       EXPECT_EQ(getInterpretationKind(SemanticKind::Barycentrics, Stage, IO),
                 Stage == Triple::Pixel && IO == IOType::In
                     ? SemanticInterpretation::NotPacked
