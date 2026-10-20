@@ -1008,6 +1008,8 @@ static bool isVkPipelineBuiltin(const ASTContext &AstContext, FunctionDecl *FD,
     return ST == llvm::Triple::Vertex && IsInput;
   case SemanticKind::Barycentrics:
     return ST == llvm::Triple::Pixel && IsInput;
+  case SemanticKind::StartVertexLocation:
+    return ST == llvm::Triple::Vertex && IsInput;
   default:
     return false;
   }
@@ -1264,6 +1266,11 @@ void SemaHLSL::diagnoseSemanticShaderModel(const HLSLAppliedSemanticAttr *A,
       Diag(A->getLoc(), diag::err_hlsl_attribute_in_wrong_shader_model)
           << A->getAttrName() << "6.1";
     return;
+  case SemanticKind::StartVertexLocation:
+    if (Triple.getOSVersion() < VersionTuple(6, 8))
+      Diag(A->getLoc(), diag::err_hlsl_attribute_in_wrong_shader_model)
+          << A->getAttrName() << "6.8";
+    return;
   default:
     return;
   }
@@ -1378,6 +1385,13 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
       Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
           << A->getAttrName() << /* scalar or vector of up to */ 1 << 3
           << /* 16 or 32 bit integer */ 0 << DeclaredTy;
+    return;
+  case SemanticKind::StartVertexLocation:
+    if (DeclaredTy != T || !T->isScalarType() ||
+        !isIntElementOfWidth(Ctx, T, 32))
+      Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
+          << A->getAttrName() << /* scalar */ 0 << 1 << /* 32 bit integer */ 1
+          << DeclaredTy;
     return;
   case SemanticKind::GroupIndex:
     if (!isIntElementOfWidth(Ctx, ElemTy, 32) || Components != 1)

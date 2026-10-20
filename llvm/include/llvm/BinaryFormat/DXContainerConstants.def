@@ -274,7 +274,10 @@ SEMANTIC_KIND(27, ViewID)
 SEMANTIC_KIND(28, Barycentrics)
 SEMANTIC_KIND(29, ShadingRate)
 SEMANTIC_KIND(30, CullPrimitive)
-SEMANTIC_KIND(30, Invalid)
+// The following kinds match DXIL::SemanticKind. They are only accessed with
+// dedicated DXIL operations, so never appear in a signature or PSV element.
+SEMANTIC_KIND(31, StartVertexLocation)
+SEMANTIC_KIND(32, Invalid)
 
 #undef SEMANTIC_KIND
 #endif // SEMANTIC_KIND

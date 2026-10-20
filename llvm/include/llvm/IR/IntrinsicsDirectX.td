@@ -17,6 +17,10 @@ def int_dx_group_id : Intrinsic<[llvm_i32_ty], [llvm_i32_ty], [IntrNoMem, IntrWi
 def int_dx_thread_id_in_group : Intrinsic<[llvm_i32_ty], [llvm_i32_ty], [IntrNoMem, IntrWillReturn]>;
 def int_dx_flattened_thread_id_in_group : Intrinsic<[llvm_i32_ty], [], [IntrNoMem, IntrWillReturn]>;
 
+// System values that are not part of an input signature and are instead read
+// with a dedicated DXIL operation.
+def int_dx_start_vertex_location : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [IntrNoMem]>;
+
 // Create resource handle given binding information. Returns a `target("dx.")`
 // type appropriate for the kind of resource given a register space ID, lower
 // bound and range size of the binding, as well as an index and an indicator

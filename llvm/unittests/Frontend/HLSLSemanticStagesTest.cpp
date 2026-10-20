@@ -67,7 +67,7 @@ constexpr SemanticKind SupportedKinds[] = {
     SemanticKind::InsideTessFactor, SemanticKind::DispatchThreadID,
     SemanticKind::GroupID,          SemanticKind::GroupIndex,
     SemanticKind::GroupThreadID,    SemanticKind::InstanceID,
-    SemanticKind::Barycentrics};
+    SemanticKind::Barycentrics,     SemanticKind::StartVertexLocation};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -110,6 +110,21 @@ TEST(HLSLSemanticStagesTest, BarycentricsAreUnpackedPixelInputs) {
                 Stage == Triple::Pixel && IO == IOType::In
                     ? SemanticInterpretation::NotPacked
                     : SemanticInterpretation::Invalid);
+}
+
+// Accessed through dedicated DXIL operations and never placed in a signature.
+static void expectNotAllocatedVertexInput(SemanticKind Kind) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive})
+      EXPECT_EQ(getInterpretationKind(Kind, Stage, IO),
+                Stage == Triple::Vertex && IO == IOType::In
+                    ? SemanticInterpretation::NotAllocated
+                    : SemanticInterpretation::Invalid);
+}
+
+TEST(HLSLSemanticStagesTest, StartVertexLocationIsANotAllocatedVertexInput) {
+  expectNotAllocatedVertexInput(SemanticKind::StartVertexLocation);
 }
 
 } // namespace
