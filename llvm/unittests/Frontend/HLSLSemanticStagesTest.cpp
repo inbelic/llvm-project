@@ -59,15 +59,23 @@ constexpr Triple::EnvironmentType AllStages[] = {
     Triple::Amplification, Triple::Mesh,  Triple::Library};
 
 // The semantic kinds getAvailableStages knows about.
-constexpr SemanticKind SupportedKinds[] = {
-    SemanticKind::Arbitrary,        SemanticKind::Position,
-    SemanticKind::VertexID,         SemanticKind::Target,
-    SemanticKind::IsFrontFace,      SemanticKind::ClipDistance,
-    SemanticKind::CullDistance,     SemanticKind::TessFactor,
-    SemanticKind::InsideTessFactor, SemanticKind::DispatchThreadID,
-    SemanticKind::GroupID,          SemanticKind::GroupIndex,
-    SemanticKind::GroupThreadID,    SemanticKind::InstanceID,
-    SemanticKind::Barycentrics,     SemanticKind::StartVertexLocation};
+constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
+                                           SemanticKind::Position,
+                                           SemanticKind::VertexID,
+                                           SemanticKind::Target,
+                                           SemanticKind::IsFrontFace,
+                                           SemanticKind::ClipDistance,
+                                           SemanticKind::CullDistance,
+                                           SemanticKind::TessFactor,
+                                           SemanticKind::InsideTessFactor,
+                                           SemanticKind::DispatchThreadID,
+                                           SemanticKind::GroupID,
+                                           SemanticKind::GroupIndex,
+                                           SemanticKind::GroupThreadID,
+                                           SemanticKind::InstanceID,
+                                           SemanticKind::Barycentrics,
+                                           SemanticKind::StartVertexLocation,
+                                           SemanticKind::StartInstanceLocation};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -125,6 +133,10 @@ static void expectNotAllocatedVertexInput(SemanticKind Kind) {
 
 TEST(HLSLSemanticStagesTest, StartVertexLocationIsANotAllocatedVertexInput) {
   expectNotAllocatedVertexInput(SemanticKind::StartVertexLocation);
+}
+
+TEST(HLSLSemanticStagesTest, StartInstanceLocationIsANotAllocatedVertexInput) {
+  expectNotAllocatedVertexInput(SemanticKind::StartInstanceLocation);
 }
 
 } // namespace
