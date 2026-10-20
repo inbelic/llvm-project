@@ -82,7 +82,8 @@ constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
                                            SemanticKind::StencilRef,
                                            SemanticKind::ViewPortArrayIndex,
                                            SemanticKind::RenderTargetArrayIndex,
-                                           SemanticKind::Coverage};
+                                           SemanticKind::Coverage,
+                                           SemanticKind::InnerCoverage};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -233,6 +234,16 @@ TEST(HLSLSemanticStagesTest, CoverageIsAPixelInputAndOutput) {
       EXPECT_EQ(getInterpretationKind(SemanticKind::Coverage, Stage, IO),
                 Expected);
     }
+}
+
+TEST(HLSLSemanticStagesTest, InnerCoverageIsANotAllocatedPixelInput) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive})
+      EXPECT_EQ(getInterpretationKind(SemanticKind::InnerCoverage, Stage, IO),
+                Stage == Triple::Pixel && IO == IOType::In
+                    ? SemanticInterpretation::NotAllocated
+                    : SemanticInterpretation::Invalid);
 }
 
 TEST(HLSLSemanticStagesTest, StencilRefIsAnUnpackedPixelOutput) {

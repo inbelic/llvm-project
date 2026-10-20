@@ -1177,9 +1177,10 @@ createSPIRVBuiltinLoad(IRBuilder<> &B, llvm::Module &M, llvm::Type *Ty,
                        const Twine &Name, unsigned BuiltInID,
                        llvm::dxbc::PSV::InterpolationMode InterpMode) {
   // Integer built-ins are 32-bit scalars in Vulkan. Narrower HLSL
-  // declarations are read from the 32-bit built-in and truncated.
+  // declarations are read from the 32-bit built-in and truncated. Boolean
+  // built-ins keep their type.
   llvm::Type *BuiltinTy = Ty;
-  if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32)
+  if (Ty->isIntegerTy() && !Ty->isIntegerTy(1) && Ty->getIntegerBitWidth() < 32)
     BuiltinTy = B.getInt32Ty();
   auto *GV = new llvm::GlobalVariable(
       M, BuiltinTy, /* isConstant= */ true, llvm::GlobalValue::ExternalLinkage,
@@ -1764,6 +1765,23 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
     // dedicated operation.
     if (CGM.getTarget().getTriple().isDXIL())
       return B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::dx_coverage));
+    break;
+  case llvm::dxbc::PSV::SemanticKind::InnerCoverage:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_InnerCoverage is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    if (CGM.getTarget().getTriple().isSPIRV()) {
+      // FullyCoveredEXT is a boolean, but SV_InnerCoverage is an integer where
+      // only bit 0 is set when the pixel is fully covered.
+      llvm::Value *FullyCovered = createSPIRVBuiltinLoad(
+          B, CGM.getModule(), B.getInt1Ty(), Semantic->getAttrName()->getName(),
+          /* BuiltIn::FullyCoveredEXT */ 5264, InterpMode);
+      return B.CreateZExt(FullyCovered, Type);
+    }
+    // The inner coverage is not part of the signature and is read with a
+    // dedicated operation.
+    if (CGM.getTarget().getTriple().isDXIL())
+      return B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::dx_inner_coverage));
     break;
   case llvm::dxbc::PSV::SemanticKind::SampleIndex:
     assert(Stage == llvm::Triple::Pixel &&

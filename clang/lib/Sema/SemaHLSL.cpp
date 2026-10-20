@@ -1020,6 +1020,8 @@ static bool isVkPipelineBuiltin(const ASTContext &AstContext, FunctionDecl *FD,
   case SemanticKind::Coverage:
     // Both the input and the output are the SampleMask built-in.
     return ST == llvm::Triple::Pixel;
+  case SemanticKind::InnerCoverage:
+    return ST == llvm::Triple::Pixel && IsInput;
   case SemanticKind::ViewPortArrayIndex:
   case SemanticKind::RenderTargetArrayIndex:
     return (ST == llvm::Triple::Vertex && !IsInput) ||
@@ -1227,6 +1229,21 @@ void SemaHLSL::CheckEntryPoint(FunctionDecl *FD) {
     }
   }
 
+  // A pixel shader can read either the coverage or the inner coverage from
+  // conservative rasterization, but not both.
+  if (ST == llvm::Triple::Pixel) {
+    auto Coverage = InputSC.ActiveSemantics.find("sv_coverage0");
+    auto InnerCoverage = InputSC.ActiveSemantics.find("sv_innercoverage0");
+    if (Coverage != InputSC.ActiveSemantics.end() &&
+        InnerCoverage != InputSC.ActiveSemantics.end()) {
+      Diag(InnerCoverage->second, diag::err_hlsl_semantic_mutually_exclusive)
+          << "SV_Coverage" << "SV_InnerCoverage"
+          << llvm::Triple::getEnvironmentTypeName(ST) << "inputs";
+      Diag(Coverage->second, diag::note_previous_use);
+      FD->setInvalidDecl();
+    }
+  }
+
   SemanticInfo ActiveSemantic;
   ActiveSemantic.Semantic = FD->getAttr<HLSLParsedSemanticAttr>();
   if (ActiveSemantic.Semantic)
@@ -1404,6 +1421,7 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
   case SemanticKind::StartInstanceLocation:
   case SemanticKind::ViewID:
   case SemanticKind::Coverage:
+  case SemanticKind::InnerCoverage:
     if (DeclaredTy != T || !T->isScalarType() ||
         !isIntElementOfWidth(Ctx, T, 32))
       Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
@@ -2245,7 +2263,6 @@ void SemaHLSL::handleSemanticAttr(Decl *D, const ParsedAttr &AL) {
   case SemanticKind::DomainLocation:
   case SemanticKind::GSInstanceID:
   case SemanticKind::IsFrontFace:
-  case SemanticKind::InnerCoverage:
   case SemanticKind::Depth:
   case SemanticKind::DepthLessEqual:
   case SemanticKind::DepthGreaterEqual:

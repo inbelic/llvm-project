@@ -24,6 +24,7 @@ def int_dx_start_instance_location : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [I
 def int_dx_sample_index : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [IntrNoMem]>;
 def int_dx_view_id : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [IntrNoMem]>;
 def int_dx_coverage : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [IntrNoMem]>;
+def int_dx_inner_coverage : DefaultAttrsIntrinsic<[llvm_i32_ty], [], [IntrNoMem]>;
 
 // Create resource handle given binding information. Returns a `target("dx.")`
 // type appropriate for the kind of resource given a register space ID, lower
