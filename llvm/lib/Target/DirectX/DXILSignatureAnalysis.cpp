@@ -101,6 +101,11 @@ static Error diagnoseSemanticType(const SemanticSignatureElement &E) {
       return signatureError(
           "SV_PrimitiveID requires a scalar 16- or 32-bit unsigned integer");
     break;
+  case dxbc::PSV::SemanticKind::Coverage:
+    if (E.Rows != 1 || E.Cols != 1 || E.CompType != ElementType::U32)
+      return signatureError(
+          "SV_Coverage requires a scalar 32-bit unsigned integer");
+    break;
   case dxbc::PSV::SemanticKind::StencilRef:
     if (E.Rows != 1 || E.Cols != 1 ||
         (E.CompType != ElementType::U16 && E.CompType != ElementType::U32))
@@ -153,6 +158,10 @@ static Error diagnoseSemanticIndex(const SemanticSignatureElement &E) {
   case dxbc::PSV::SemanticKind::PrimitiveID:
     if (E.SemanticIndices.front() != 0)
       return signatureError("SV_PrimitiveID requires semantic index 0");
+    break;
+  case dxbc::PSV::SemanticKind::Coverage:
+    if (E.SemanticIndices.front() != 0)
+      return signatureError("SV_Coverage requires semantic index 0");
     break;
   case dxbc::PSV::SemanticKind::StencilRef:
     if (E.SemanticIndices.front() != 0)
@@ -592,6 +601,8 @@ static dxbc::D3DSystemValue getSystemValue(dxbc::PSV::SemanticKind Kind) {
     return dxbc::D3DSystemValue::PrimitiveID;
   case KindTy::StencilRef:
     return dxbc::D3DSystemValue::StencilRef;
+  case KindTy::Coverage:
+    return dxbc::D3DSystemValue::Coverage;
   case KindTy::ViewPortArrayIndex:
     return dxbc::D3DSystemValue::ViewPortArrayIndex;
   case KindTy::RenderTargetArrayIndex:
@@ -632,6 +643,8 @@ static StringRef getContainerSemanticName(const SemanticSignatureElement &E) {
     return "SV_PrimitiveID";
   case Kind::StencilRef:
     return "SV_StencilRef";
+  case Kind::Coverage:
+    return "SV_Coverage";
   case Kind::ViewPortArrayIndex:
     return "SV_ViewportArrayIndex";
   case Kind::RenderTargetArrayIndex:

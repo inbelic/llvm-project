@@ -1192,6 +1192,45 @@ createSPIRVBuiltinLoad(IRBuilder<> &B, llvm::Module &M, llvm::Type *Ty,
   return BuiltinTy == Ty ? Value : B.CreateTrunc(Value, Ty);
 }
 
+// The SampleMask built-in is an array of 32-bit integers, with one element for
+// every 32 samples (see VUID-SampleMask-SampleMask-04359). SV_Coverage is a
+// single 32-bit mask, which maps to its first element.
+static llvm::GlobalVariable *
+createSPIRVSampleMaskVariable(llvm::Module &M, llvm::Type *Ty,
+                              const Twine &Name, bool IsInput,
+                              llvm::dxbc::PSV::InterpolationMode InterpMode) {
+  auto *GV = new llvm::GlobalVariable(
+      M, llvm::ArrayType::get(Ty, 1), /* isConstant= */ IsInput,
+      llvm::GlobalValue::ExternalLinkage, /* Initializer= */ nullptr, Name,
+      /* insertBefore= */ nullptr, llvm::GlobalVariable::GeneralDynamicTLSModel,
+      /* AddressSpace */ IsInput ? 7 : 8,
+      /* isExternallyInitialized= */ IsInput);
+  addSPIRVInterfaceDecorations(GV, /* BuiltIn */ 11,
+                               /* BuiltIn::SampleMask */ 20, InterpMode);
+  GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
+  return GV;
+}
+
+static llvm::Value *
+createSPIRVSampleMaskLoad(IRBuilder<> &B, llvm::Module &M, llvm::Type *Ty,
+                          const Twine &Name,
+                          llvm::dxbc::PSV::InterpolationMode InterpMode) {
+  llvm::GlobalVariable *GV = createSPIRVSampleMaskVariable(
+      M, Ty, Name, /* IsInput= */ true, InterpMode);
+  llvm::Value *Ptr = B.CreateConstInBoundsGEP2_32(GV->getValueType(), GV, 0, 0);
+  return B.CreateLoad(Ty, Ptr);
+}
+
+static void
+createSPIRVSampleMaskStore(IRBuilder<> &B, llvm::Module &M, llvm::Value *Source,
+                           const Twine &Name,
+                           llvm::dxbc::PSV::InterpolationMode InterpMode) {
+  llvm::GlobalVariable *GV = createSPIRVSampleMaskVariable(
+      M, Source->getType(), Name, /* IsInput= */ false, InterpMode);
+  llvm::Value *Ptr = B.CreateConstInBoundsGEP2_32(GV->getValueType(), GV, 0, 0);
+  B.CreateStore(Source, Ptr);
+}
+
 static llvm::Value *
 createSPIRVLocationLoad(IRBuilder<> &B, llvm::Module &M, llvm::Type *Ty,
                         unsigned Location, StringRef Name,
@@ -1713,6 +1752,19 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
       return emitDXILUserSemanticLoad(B, Type, Decl, Semantic, Index,
                                       Signature);
     break;
+  case llvm::dxbc::PSV::SemanticKind::Coverage:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_Coverage is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    if (CGM.getTarget().getTriple().isSPIRV())
+      return createSPIRVSampleMaskLoad(B, CGM.getModule(), Type,
+                                       Semantic->getAttrName()->getName(),
+                                       InterpMode);
+    // The input coverage is not part of the signature and is read with a
+    // dedicated operation.
+    if (CGM.getTarget().getTriple().isDXIL())
+      return B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::dx_coverage));
+    break;
   case llvm::dxbc::PSV::SemanticKind::SampleIndex:
     assert(Stage == llvm::Triple::Pixel &&
            "SV_SampleIndex is in an unavailable stage and should have been "
@@ -1848,6 +1900,23 @@ void CGHLSLRuntime::emitSystemSemanticStore(
       createSPIRVBuiltinStore(B, CGM.getModule(), Source,
                               Semantic->getAttrName()->getName(),
                               /* BuiltIn::Layer */ 9, InterpMode, IsSignedInt);
+      return;
+    }
+    break;
+  case llvm::dxbc::PSV::SemanticKind::Coverage:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_Coverage is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    // The output coverage is an output element that is not packed into the
+    // render-target rows.
+    if (CGM.getTarget().getTriple().isDXIL()) {
+      emitDXILUserSemanticStore(B, Source, Decl, Semantic, Index, Signature);
+      return;
+    }
+    if (CGM.getTarget().getTriple().isSPIRV()) {
+      createSPIRVSampleMaskStore(B, CGM.getModule(), Source,
+                                 Semantic->getAttrName()->getName(),
+                                 InterpMode);
       return;
     }
     break;

@@ -59,30 +59,30 @@ constexpr Triple::EnvironmentType AllStages[] = {
     Triple::Amplification, Triple::Mesh,  Triple::Library};
 
 // The semantic kinds getAvailableStages knows about.
-constexpr SemanticKind SupportedKinds[] = {
-    SemanticKind::Arbitrary,
-    SemanticKind::Position,
-    SemanticKind::VertexID,
-    SemanticKind::Target,
-    SemanticKind::IsFrontFace,
-    SemanticKind::ClipDistance,
-    SemanticKind::CullDistance,
-    SemanticKind::TessFactor,
-    SemanticKind::InsideTessFactor,
-    SemanticKind::DispatchThreadID,
-    SemanticKind::GroupID,
-    SemanticKind::GroupIndex,
-    SemanticKind::GroupThreadID,
-    SemanticKind::InstanceID,
-    SemanticKind::Barycentrics,
-    SemanticKind::StartVertexLocation,
-    SemanticKind::StartInstanceLocation,
-    SemanticKind::SampleIndex,
-    SemanticKind::ViewID,
-    SemanticKind::PrimitiveID,
-    SemanticKind::StencilRef,
-    SemanticKind::ViewPortArrayIndex,
-    SemanticKind::RenderTargetArrayIndex};
+constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
+                                           SemanticKind::Position,
+                                           SemanticKind::VertexID,
+                                           SemanticKind::Target,
+                                           SemanticKind::IsFrontFace,
+                                           SemanticKind::ClipDistance,
+                                           SemanticKind::CullDistance,
+                                           SemanticKind::TessFactor,
+                                           SemanticKind::InsideTessFactor,
+                                           SemanticKind::DispatchThreadID,
+                                           SemanticKind::GroupID,
+                                           SemanticKind::GroupIndex,
+                                           SemanticKind::GroupThreadID,
+                                           SemanticKind::InstanceID,
+                                           SemanticKind::Barycentrics,
+                                           SemanticKind::StartVertexLocation,
+                                           SemanticKind::StartInstanceLocation,
+                                           SemanticKind::SampleIndex,
+                                           SemanticKind::ViewID,
+                                           SemanticKind::PrimitiveID,
+                                           SemanticKind::StencilRef,
+                                           SemanticKind::ViewPortArrayIndex,
+                                           SemanticKind::RenderTargetArrayIndex,
+                                           SemanticKind::Coverage};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -215,6 +215,22 @@ TEST(HLSLSemanticStagesTest, InstanceIDIsOnlyASystemValueVertexInput) {
                (Stage == Triple::Pixel && IO == IOType::In))
         Expected = SemanticInterpretation::Arbitrary;
       EXPECT_EQ(getInterpretationKind(SemanticKind::InstanceID, Stage, IO),
+                Expected);
+    }
+}
+
+// The input is read with a dedicated operation, while the output is part of
+// the signature without a register.
+TEST(HLSLSemanticStagesTest, CoverageIsAPixelInputAndOutput) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive}) {
+      SemanticInterpretation Expected = SemanticInterpretation::Invalid;
+      if (Stage == Triple::Pixel && IO == IOType::In)
+        Expected = SemanticInterpretation::NotAllocated;
+      else if (Stage == Triple::Pixel && IO == IOType::Out)
+        Expected = SemanticInterpretation::NotPacked;
+      EXPECT_EQ(getInterpretationKind(SemanticKind::Coverage, Stage, IO),
                 Expected);
     }
 }
