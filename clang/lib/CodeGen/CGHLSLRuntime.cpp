@@ -1176,14 +1176,20 @@ static llvm::Value *
 createSPIRVBuiltinLoad(IRBuilder<> &B, llvm::Module &M, llvm::Type *Ty,
                        const Twine &Name, unsigned BuiltInID,
                        llvm::dxbc::PSV::InterpolationMode InterpMode) {
+  // Integer built-ins are 32-bit scalars in Vulkan. Narrower HLSL
+  // declarations are read from the 32-bit built-in and truncated.
+  llvm::Type *BuiltinTy = Ty;
+  if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32)
+    BuiltinTy = B.getInt32Ty();
   auto *GV = new llvm::GlobalVariable(
-      M, Ty, /* isConstant= */ true, llvm::GlobalValue::ExternalLinkage,
+      M, BuiltinTy, /* isConstant= */ true, llvm::GlobalValue::ExternalLinkage,
       /* Initializer= */ nullptr, Name, /* insertBefore= */ nullptr,
       llvm::GlobalVariable::GeneralDynamicTLSModel,
       /* AddressSpace */ 7, /* isExternallyInitialized= */ true);
   addSPIRVInterfaceDecorations(GV, /* BuiltIn */ 11, BuiltInID, InterpMode);
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
-  return B.CreateLoad(Ty, GV);
+  llvm::Value *Value = B.CreateLoad(BuiltinTy, GV);
+  return BuiltinTy == Ty ? Value : B.CreateTrunc(Value, Ty);
 }
 
 static llvm::Value *
@@ -1341,13 +1347,24 @@ static llvm::hlsl::SemanticSignatureElement createSemanticSignatureElement(
   for (uint32_t I = 0, E = Shape.getNumRows(); I < E; ++I)
     SemanticIndices.push_back(FirstSemanticIndex + I);
 
+  llvm::dxbc::PSV::SemanticKind Kind = llvm::hlsl::getSemanticKind(Name);
+  llvm::dxil::ElementType CompType =
+      getSignatureComponentType(CGM, Shape.RowType);
+  // These system values may be declared as int or uint, but DXIL signatures
+  // require an unsigned component type.
+  if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex) {
+    if (CompType == llvm::dxil::ElementType::I16)
+      CompType = llvm::dxil::ElementType::U16;
+    else if (CompType == llvm::dxil::ElementType::I32)
+      CompType = llvm::dxil::ElementType::U32;
+  }
+
   // The remaining members keep their default value and will be filled at a
   // later stage, either during packing or analysis of usage. Interpolation
   // is set by the load/store traversal after visiting each leaf.
-  return llvm::hlsl::SemanticSignatureElement(
-      SigId, Name, getSignatureComponentType(CGM, Shape.RowType),
-      llvm::hlsl::getSemanticKind(Name), SemanticIndices,
-      static_cast<uint8_t>(Shape.Cols));
+  return llvm::hlsl::SemanticSignatureElement(SigId, Name, CompType, Kind,
+                                              SemanticIndices,
+                                              static_cast<uint8_t>(Shape.Cols));
 }
 
 llvm::Value *CGHLSLRuntime::emitDXILUserSemanticLoad(
@@ -1643,6 +1660,26 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
     if (CGM.getTarget().getTriple().isDXIL())
       return B.CreateCall(
           CGM.getIntrinsic(llvm::Intrinsic::dx_start_vertex_location));
+    break;
+  case llvm::dxbc::PSV::SemanticKind::SampleIndex:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_SampleIndex is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    if (CGM.getTarget().getTriple().isSPIRV())
+      return createSPIRVBuiltinLoad(B, CGM.getModule(), Type,
+                                    Semantic->getAttrName()->getName(),
+                                    /* BuiltIn::SampleId */ 18, InterpMode);
+    if (CGM.getTarget().getTriple().isDXIL()) {
+      // The sample index is read with a dedicated operation, but an unpacked
+      // element is still added to the input signature for compatibility.
+      SemanticShape Shape =
+          getSemanticShape(CGM.getContext(), getSemanticLeafType(Decl));
+      Signature.push_back(createSemanticSignatureElement(
+          CGM, Signature.size(), Semantic, Index, Shape));
+      llvm::Value *SampleIndex =
+          B.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::dx_sample_index));
+      return B.CreateTrunc(SampleIndex, Type);
+    }
     break;
   case llvm::dxbc::PSV::SemanticKind::StartInstanceLocation:
     assert(Stage == llvm::Triple::Vertex &&

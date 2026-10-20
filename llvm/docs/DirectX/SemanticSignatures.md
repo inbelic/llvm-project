@@ -140,9 +140,11 @@ columns. An element occupies a rectangle of `Rows` consecutive registers and
 The packing helper classifies each element from its semantic kind, shader stage,
 and I/O type. Elements with the `NotAllocated` interpretation are accessed by
 dedicated intrinsics and do not appear in input/output signature metadata.
-Elements with the `NotPacked` interpretation, remain in the signature and use
-ordinary `llvm.dx.load.input` accesses, but retain the unallocated row and
-column sentinels. Neither interpretation reserves registers. The remaining
+Elements with the `NotPacked` interpretation, remain in the signature but
+retain the unallocated row and column sentinels. Most use ordinary
+`llvm.dx.load.input` accesses, but `SV_SampleIndex` is only kept for
+compatibility and is read with a dedicated intrinsic. Neither interpretation
+reserves registers. The remaining
 interpretations accepted by a packing algorithm are assigned locations according
 to that algorithm's rules. If an eligible element cannot be placed, packing
 returns a `SignaturePackingError` identifying the element that failed.

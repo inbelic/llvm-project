@@ -456,11 +456,15 @@ void ModuleShaderFlags::initialize(Module &M, DXILResourceTypeMap &DRTM,
         CSF.Barycentrics |= llvm::any_of(Sig->Inputs, [](const auto &E) {
           return E.SemanticKind == dxbc::PSV::SemanticKind::Barycentrics;
         });
+        // Unallocated elements do not occupy signature registers. Their type
+        // requirements only come from the instructions that access them,
+        // such as loadInput for SV_Barycentrics or dx.op.sampleIndex for
+        // SV_SampleIndex.
         auto HasLowPrecision = [](const auto &Elements) {
           return llvm::any_of(Elements, [](const auto &E) {
-            return E.CompType == ElementType::F16 ||
-                   E.CompType == ElementType::I16 ||
-                   E.CompType == ElementType::U16;
+            return E.isAllocated() && (E.CompType == ElementType::F16 ||
+                                       E.CompType == ElementType::I16 ||
+                                       E.CompType == ElementType::U16);
           });
         };
         if (HasLowPrecision(Sig->Inputs) || HasLowPrecision(Sig->Outputs)) {

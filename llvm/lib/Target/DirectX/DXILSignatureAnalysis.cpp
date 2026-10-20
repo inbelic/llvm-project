@@ -90,6 +90,12 @@ static Error diagnoseSemanticType(const SemanticSignatureElement &E) {
       return signatureError(
           "SV_InstanceID requires a scalar 16- or 32-bit unsigned integer");
     break;
+  case dxbc::PSV::SemanticKind::SampleIndex:
+    if (E.Rows != 1 || E.Cols != 1 ||
+        (E.CompType != ElementType::U16 && E.CompType != ElementType::U32))
+      return signatureError(
+          "SV_SampleIndex requires a scalar 16- or 32-bit unsigned integer");
+    break;
   case dxbc::PSV::SemanticKind::Barycentrics:
     if (E.Rows != 1 || E.Cols != 3 ||
         (E.CompType != ElementType::F16 && E.CompType != ElementType::F32))
@@ -116,6 +122,10 @@ static Error diagnoseSemanticIndex(const SemanticSignatureElement &E) {
   case dxbc::PSV::SemanticKind::Barycentrics:
     if (E.SemanticIndices.front() != 0)
       return signatureError("SV_Barycentrics requires semantic index 0");
+    break;
+  case dxbc::PSV::SemanticKind::SampleIndex:
+    if (E.SemanticIndices.front() != 0)
+      return signatureError("SV_SampleIndex requires semantic index 0");
     break;
   default:
     break;
@@ -193,8 +203,8 @@ static Error parseSignature(Metadata *MD,
                             "point");
     if (Interpretation == SemanticInterpretation::NotPacked) {
       if (E.isAllocated())
-        return signatureError(
-            "SV_Barycentrics must not have an allocated location");
+        return signatureError(E.SemanticName +
+                              " must not have an allocated location");
     } else {
       if (!E.isAllocated())
         return signatureError("signature element " + Twine(E.SigId) + " ('" +
@@ -298,6 +308,10 @@ static Error analyzeAccess(const IntrinsicInst &I, EntrySignature &Sig) {
     return signatureError(Category + " signature element " + Twine(E.SigId) +
                           " ('" + E.SemanticName + "'): " + Message);
   };
+  // Unlike other unpacked elements, the sample index is only read with
+  // dx.op.sampleIndex. Its element exists for compatibility.
+  if (E.SemanticKind == dxbc::PSV::SemanticKind::SampleIndex)
+    return AccessError("SV_SampleIndex must be read with dx.op.sampleIndex");
   Type *Ty = Input ? I.getType() : I.getArgOperand(3)->getType();
   unsigned Width = 1;
   if (auto *VT = dyn_cast<FixedVectorType>(Ty)) {
@@ -527,6 +541,8 @@ static dxbc::D3DSystemValue getSystemValue(dxbc::PSV::SemanticKind Kind) {
     return dxbc::D3DSystemValue::Target;
   case KindTy::Barycentrics:
     return dxbc::D3DSystemValue::Barycentrics;
+  case KindTy::SampleIndex:
+    return dxbc::D3DSystemValue::SampleIndex;
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -557,6 +573,8 @@ static StringRef getContainerSemanticName(const SemanticSignatureElement &E) {
     return "SV_Target";
   case Kind::Barycentrics:
     return "SV_Barycentrics";
+  case Kind::SampleIndex:
+    return "SV_SampleIndex";
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -636,7 +654,8 @@ void EntrySignature::updatePSV(mcdxbc::PSVRuntimeInfo &PSV,
         llvm::any_of(Inputs, [](const auto &E) {
           return E.InterpMode == dxbc::PSV::InterpolationMode::LinearSample ||
                  E.InterpMode ==
-                     dxbc::PSV::InterpolationMode::LinearNoperspectiveSample;
+                     dxbc::PSV::InterpolationMode::LinearNoperspectiveSample ||
+                 E.SemanticKind == dxbc::PSV::SemanticKind::SampleIndex;
         });
 }
 

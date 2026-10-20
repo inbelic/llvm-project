@@ -75,7 +75,8 @@ constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
                                            SemanticKind::InstanceID,
                                            SemanticKind::Barycentrics,
                                            SemanticKind::StartVertexLocation,
-                                           SemanticKind::StartInstanceLocation};
+                                           SemanticKind::StartInstanceLocation,
+                                           SemanticKind::SampleIndex};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -137,6 +138,16 @@ TEST(HLSLSemanticStagesTest, StartVertexLocationIsANotAllocatedVertexInput) {
 
 TEST(HLSLSemanticStagesTest, StartInstanceLocationIsANotAllocatedVertexInput) {
   expectNotAllocatedVertexInput(SemanticKind::StartInstanceLocation);
+}
+
+TEST(HLSLSemanticStagesTest, SampleIndexIsAnUnpackedPixelInput) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive})
+      EXPECT_EQ(getInterpretationKind(SemanticKind::SampleIndex, Stage, IO),
+                Stage == Triple::Pixel && IO == IOType::In
+                    ? SemanticInterpretation::NotPacked
+                    : SemanticInterpretation::Invalid);
 }
 
 } // namespace

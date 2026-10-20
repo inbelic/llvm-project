@@ -1007,6 +1007,7 @@ static bool isVkPipelineBuiltin(const ASTContext &AstContext, FunctionDecl *FD,
   case SemanticKind::InstanceID:
     return ST == llvm::Triple::Vertex && IsInput;
   case SemanticKind::Barycentrics:
+  case SemanticKind::SampleIndex:
     return ST == llvm::Triple::Pixel && IsInput;
   case SemanticKind::StartVertexLocation:
   case SemanticKind::StartInstanceLocation:
@@ -1414,6 +1415,14 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
       Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
           << A->getAttrName() << /* scalar or vector of up to */ 1 << 4
           << /* 16 or 32 bit floating-point */ 2 << DeclaredTy;
+    return;
+  case SemanticKind::SampleIndex:
+    // SPIR-V declares these built-ins as 32-bit integers and converts 16-bit
+    // declarations.
+    if (DeclaredTy != T || !T->isScalarType() || !isIntUpTo32Element(Ctx, T))
+      Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
+          << A->getAttrName() << /* scalar */ 0 << 1
+          << /* 16 or 32 bit integer */ 0 << DeclaredTy;
     return;
   case SemanticKind::InstanceID:
     // DXIL permits U32 or U16. SPIR-V requires a 32-bit scalar per
@@ -2230,7 +2239,6 @@ void SemaHLSL::handleSemanticAttr(Decl *D, const ParsedAttr &AL) {
   case SemanticKind::DomainLocation:
   case SemanticKind::PrimitiveID:
   case SemanticKind::GSInstanceID:
-  case SemanticKind::SampleIndex:
   case SemanticKind::IsFrontFace:
   case SemanticKind::Coverage:
   case SemanticKind::InnerCoverage:
