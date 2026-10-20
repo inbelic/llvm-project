@@ -76,7 +76,8 @@ constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
                                            SemanticKind::Barycentrics,
                                            SemanticKind::StartVertexLocation,
                                            SemanticKind::StartInstanceLocation,
-                                           SemanticKind::SampleIndex};
+                                           SemanticKind::SampleIndex,
+                                           SemanticKind::ViewID};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -138,6 +139,28 @@ TEST(HLSLSemanticStagesTest, StartVertexLocationIsANotAllocatedVertexInput) {
 
 TEST(HLSLSemanticStagesTest, StartInstanceLocationIsANotAllocatedVertexInput) {
   expectNotAllocatedVertexInput(SemanticKind::StartInstanceLocation);
+}
+
+// ViewID is read with a dedicated operation by every graphics stage that
+// consumes it, but is not available to amplification shaders or mesh shader
+// outputs.
+TEST(HLSLSemanticStagesTest, ViewIDIsANotAllocatedGraphicsInput) {
+  for (Triple::EnvironmentType Stage :
+       {Triple::Vertex, Triple::Geometry, Triple::Pixel, Triple::Mesh})
+    EXPECT_EQ(getInterpretationKind(SemanticKind::ViewID, Stage, IOType::In),
+              SemanticInterpretation::NotAllocated);
+  for (Triple::EnvironmentType Stage : AllStages)
+    EXPECT_EQ(getInterpretationKind(SemanticKind::ViewID, Stage, IOType::Out),
+              SemanticInterpretation::Invalid);
+  EXPECT_EQ(getInterpretationKind(SemanticKind::ViewID, Triple::Amplification,
+                                  IOType::In),
+            SemanticInterpretation::Invalid);
+  EXPECT_EQ(
+      getInterpretationKind(SemanticKind::ViewID, Triple::Compute, IOType::In),
+      SemanticInterpretation::Invalid);
+  EXPECT_EQ(getInterpretationKind(SemanticKind::ViewID, Triple::Mesh,
+                                  IOType::PatchConstantOrPrimitive),
+            SemanticInterpretation::Invalid);
 }
 
 TEST(HLSLSemanticStagesTest, SampleIndexIsAnUnpackedPixelInput) {
