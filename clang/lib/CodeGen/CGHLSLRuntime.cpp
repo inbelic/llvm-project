@@ -1358,7 +1358,8 @@ static llvm::hlsl::SemanticSignatureElement createSemanticSignatureElement(
   // require an unsigned component type.
   if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex ||
       Kind == llvm::dxbc::PSV::SemanticKind::PrimitiveID ||
-      Kind == llvm::dxbc::PSV::SemanticKind::StencilRef) {
+      Kind == llvm::dxbc::PSV::SemanticKind::StencilRef ||
+      Kind == llvm::dxbc::PSV::SemanticKind::ViewPortArrayIndex) {
     if (CompType == llvm::dxil::ElementType::I16)
       CompType = llvm::dxil::ElementType::U16;
     else if (CompType == llvm::dxil::ElementType::I32)
@@ -1685,6 +1686,18 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
       return B.CreateCall(
           CGM.getIntrinsic(llvm::Intrinsic::dx_start_vertex_location));
     break;
+  case llvm::dxbc::PSV::SemanticKind::ViewPortArrayIndex:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_ViewportArrayIndex is only a system value input to pixel "
+           "shaders");
+    if (CGM.getTarget().getTriple().isSPIRV())
+      return createSPIRVBuiltinLoad(
+          B, CGM.getModule(), Type, Semantic->getAttrName()->getName(),
+          /* BuiltIn::ViewportIndex */ 10, InterpMode);
+    if (CGM.getTarget().getTriple().isDXIL())
+      return emitDXILUserSemanticLoad(B, Type, Decl, Semantic, Index,
+                                      Signature);
+    break;
   case llvm::dxbc::PSV::SemanticKind::PrimitiveID:
     assert(Stage == llvm::Triple::Pixel &&
            "SV_PrimitiveID is in an unavailable stage and should have been "
@@ -1804,6 +1817,21 @@ void CGHLSLRuntime::emitSystemSemanticStore(
       createSPIRVBuiltinStore(B, CGM.getModule(), Source,
                               Semantic->getAttrName()->getName(),
                               /* BuiltIn::Position */ 0, InterpMode);
+      return;
+    }
+    break;
+  case llvm::dxbc::PSV::SemanticKind::ViewPortArrayIndex:
+    assert(Stage == llvm::Triple::Vertex &&
+           "SV_ViewportArrayIndex is only a system value output of vertex "
+           "shaders");
+    if (CGM.getTarget().getTriple().isDXIL()) {
+      emitDXILUserSemanticStore(B, Source, Decl, Semantic, Index, Signature);
+      return;
+    }
+    if (CGM.getTarget().getTriple().isSPIRV()) {
+      createSPIRVBuiltinStore(
+          B, CGM.getModule(), Source, Semantic->getAttrName()->getName(),
+          /* BuiltIn::ViewportIndex */ 10, InterpMode, IsSignedInt);
       return;
     }
     break;

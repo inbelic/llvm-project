@@ -79,7 +79,8 @@ constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
                                            SemanticKind::SampleIndex,
                                            SemanticKind::ViewID,
                                            SemanticKind::PrimitiveID,
-                                           SemanticKind::StencilRef};
+                                           SemanticKind::StencilRef,
+                                           SemanticKind::ViewPortArrayIndex};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -175,6 +176,26 @@ TEST(HLSLSemanticStagesTest, PrimitiveIDIsASystemGeneratedPixelInput) {
   EXPECT_EQ(getInterpretationKind(SemanticKind::PrimitiveID, Triple::Vertex,
                                   IOType::In),
             SemanticInterpretation::Invalid);
+}
+
+// Written by the vertex shader and read by the pixel shader. A vertex input
+// with this name is an arbitrary semantic.
+static void expectRasterizerIndex(SemanticKind Kind) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive}) {
+      SemanticInterpretation Expected = SemanticInterpretation::Invalid;
+      if (Stage == Triple::Vertex && IO == IOType::In)
+        Expected = SemanticInterpretation::Arbitrary;
+      else if ((Stage == Triple::Vertex && IO == IOType::Out) ||
+               (Stage == Triple::Pixel && IO == IOType::In))
+        Expected = SemanticInterpretation::SV;
+      EXPECT_EQ(getInterpretationKind(Kind, Stage, IO), Expected);
+    }
+}
+
+TEST(HLSLSemanticStagesTest, ViewportArrayIndexFeedsTheRasterizer) {
+  expectRasterizerIndex(SemanticKind::ViewPortArrayIndex);
 }
 
 TEST(HLSLSemanticStagesTest, StencilRefIsAnUnpackedPixelOutput) {
