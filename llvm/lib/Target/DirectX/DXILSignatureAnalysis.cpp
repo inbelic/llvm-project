@@ -102,6 +102,12 @@ static Error diagnoseSemanticType(const SemanticSignatureElement &E) {
       return signatureError(
           "SV_PrimitiveID requires a scalar 16- or 32-bit unsigned integer");
     break;
+  case dxbc::PSV::SemanticKind::StencilRef:
+    if (E.Rows != 1 || E.Cols != 1 ||
+        (E.CompType != ElementType::U16 && E.CompType != ElementType::U32))
+      return signatureError(
+          "SV_StencilRef requires a scalar 16- or 32-bit unsigned integer");
+    break;
   case dxbc::PSV::SemanticKind::Barycentrics:
     if (E.Rows != 1 || E.Cols != 3 ||
         (E.CompType != ElementType::F16 && E.CompType != ElementType::F32))
@@ -136,6 +142,10 @@ static Error diagnoseSemanticIndex(const SemanticSignatureElement &E) {
   case dxbc::PSV::SemanticKind::PrimitiveID:
     if (E.SemanticIndices.front() != 0)
       return signatureError("SV_PrimitiveID requires semantic index 0");
+    break;
+  case dxbc::PSV::SemanticKind::StencilRef:
+    if (E.SemanticIndices.front() != 0)
+      return signatureError("SV_StencilRef requires semantic index 0");
     break;
   default:
     break;
@@ -387,7 +397,11 @@ static void buildDependencyMap(EntrySignature &Sig) {
         if (!(Input.UsageMask & (1U << IC)))
           continue;
         unsigned Base = ((Input.StartRow + IR) * 4 + IC) * Words;
-        for (const auto &Output : Sig.Outputs)
+        for (const auto &Output : Sig.Outputs) {
+          // Unallocated outputs, such as SV_StencilRef, have no row in the
+          // dependency table.
+          if (!Output.isAllocated())
+            continue;
           for (unsigned OR = 0; OR != Output.Rows; ++OR)
             for (unsigned OC = 0; OC != 4; ++OC) {
               if (!(Output.UsageMask & (1U << OC)))
@@ -395,6 +409,7 @@ static void buildDependencyMap(EntrySignature &Sig) {
               unsigned Bit = (Output.StartRow + OR) * 4 + OC;
               Sig.InputOutputMap[Base + Bit / 32] |= 1U << (Bit % 32);
             }
+        }
       }
   }
 }
@@ -555,6 +570,8 @@ static dxbc::D3DSystemValue getSystemValue(dxbc::PSV::SemanticKind Kind) {
     return dxbc::D3DSystemValue::SampleIndex;
   case KindTy::PrimitiveID:
     return dxbc::D3DSystemValue::PrimitiveID;
+  case KindTy::StencilRef:
+    return dxbc::D3DSystemValue::StencilRef;
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -589,6 +606,8 @@ static StringRef getContainerSemanticName(const SemanticSignatureElement &E) {
     return "SV_SampleIndex";
   case Kind::PrimitiveID:
     return "SV_PrimitiveID";
+  case Kind::StencilRef:
+    return "SV_StencilRef";
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }

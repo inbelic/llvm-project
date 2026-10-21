@@ -78,7 +78,8 @@ constexpr SemanticKind SupportedKinds[] = {SemanticKind::Arbitrary,
                                            SemanticKind::StartInstanceLocation,
                                            SemanticKind::SampleIndex,
                                            SemanticKind::ViewID,
-                                           SemanticKind::PrimitiveID};
+                                           SemanticKind::PrimitiveID,
+                                           SemanticKind::StencilRef};
 
 // Ensure all stages return a valid SemanticInterpretation
 TEST(HLSLSemanticStagesTest, StagesAreValid) {
@@ -174,6 +175,16 @@ TEST(HLSLSemanticStagesTest, PrimitiveIDIsASystemGeneratedPixelInput) {
   EXPECT_EQ(getInterpretationKind(SemanticKind::PrimitiveID, Triple::Vertex,
                                   IOType::In),
             SemanticInterpretation::Invalid);
+}
+
+TEST(HLSLSemanticStagesTest, StencilRefIsAnUnpackedPixelOutput) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive})
+      EXPECT_EQ(getInterpretationKind(SemanticKind::StencilRef, Stage, IO),
+                Stage == Triple::Pixel && IO == IOType::Out
+                    ? SemanticInterpretation::NotPacked
+                    : SemanticInterpretation::Invalid);
 }
 
 TEST(HLSLSemanticStagesTest, SampleIndexIsAnUnpackedPixelInput) {

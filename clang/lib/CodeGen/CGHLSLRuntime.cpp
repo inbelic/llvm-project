@@ -1357,7 +1357,8 @@ static llvm::hlsl::SemanticSignatureElement createSemanticSignatureElement(
   // These system values may be declared as int or uint, but DXIL signatures
   // require an unsigned component type.
   if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex ||
-      Kind == llvm::dxbc::PSV::SemanticKind::PrimitiveID) {
+      Kind == llvm::dxbc::PSV::SemanticKind::PrimitiveID ||
+      Kind == llvm::dxbc::PSV::SemanticKind::StencilRef) {
     if (CompType == llvm::dxil::ElementType::I16)
       CompType = llvm::dxil::ElementType::U16;
     else if (CompType == llvm::dxil::ElementType::I32)
@@ -1755,7 +1756,14 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
 static void
 createSPIRVBuiltinStore(IRBuilder<> &B, llvm::Module &M, llvm::Value *Source,
                         const Twine &Name, unsigned BuiltInID,
-                        llvm::dxbc::PSV::InterpolationMode InterpMode) {
+                        llvm::dxbc::PSV::InterpolationMode InterpMode,
+                        bool IsSigned = false) {
+  // Integer built-ins are 32-bit scalars in Vulkan. Narrower HLSL
+  // declarations are extended before they are written to the built-in.
+  llvm::Type *Ty = Source->getType();
+  if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32)
+    Source = IsSigned ? B.CreateSExt(Source, B.getInt32Ty())
+                      : B.CreateZExt(Source, B.getInt32Ty());
   auto *GV = new llvm::GlobalVariable(
       M, Source->getType(), /* isConstant= */ false,
       llvm::GlobalValue::ExternalLinkage,
@@ -1774,6 +1782,8 @@ void CGHLSLRuntime::emitSystemSemanticStore(
     llvm::Triple::EnvironmentType Stage, std::optional<unsigned> Index,
     SemanticSignatures &Signature,
     llvm::dxbc::PSV::InterpolationMode InterpMode) {
+  const bool IsSignedInt =
+      getSemanticLeafType(Decl)->isSignedIntegerOrEnumerationType();
   switch (SemanticKind) {
   case llvm::dxbc::PSV::SemanticKind::Position:
     assert(llvm::is_contained({llvm::Triple::Vertex, llvm::Triple::Hull,
@@ -1794,6 +1804,23 @@ void CGHLSLRuntime::emitSystemSemanticStore(
       createSPIRVBuiltinStore(B, CGM.getModule(), Source,
                               Semantic->getAttrName()->getName(),
                               /* BuiltIn::Position */ 0, InterpMode);
+      return;
+    }
+    break;
+  case llvm::dxbc::PSV::SemanticKind::StencilRef:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_StencilRef is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    // The stencil reference is stored to an output element that is not
+    // packed into the render-target rows.
+    if (CGM.getTarget().getTriple().isDXIL()) {
+      emitDXILUserSemanticStore(B, Source, Decl, Semantic, Index, Signature);
+      return;
+    }
+    if (CGM.getTarget().getTriple().isSPIRV()) {
+      createSPIRVBuiltinStore(
+          B, CGM.getModule(), Source, Semantic->getAttrName()->getName(),
+          /* BuiltIn::FragStencilRefEXT */ 5014, InterpMode, IsSignedInt);
       return;
     }
     break;
