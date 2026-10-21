@@ -96,6 +96,12 @@ static Error diagnoseSemanticType(const SemanticSignatureElement &E) {
       return signatureError(
           "SV_SampleIndex requires a scalar 16- or 32-bit unsigned integer");
     break;
+  case dxbc::PSV::SemanticKind::PrimitiveID:
+    if (E.Rows != 1 || E.Cols != 1 ||
+        (E.CompType != ElementType::U16 && E.CompType != ElementType::U32))
+      return signatureError(
+          "SV_PrimitiveID requires a scalar 16- or 32-bit unsigned integer");
+    break;
   case dxbc::PSV::SemanticKind::Barycentrics:
     if (E.Rows != 1 || E.Cols != 3 ||
         (E.CompType != ElementType::F16 && E.CompType != ElementType::F32))
@@ -126,6 +132,10 @@ static Error diagnoseSemanticIndex(const SemanticSignatureElement &E) {
   case dxbc::PSV::SemanticKind::SampleIndex:
     if (E.SemanticIndices.front() != 0)
       return signatureError("SV_SampleIndex requires semantic index 0");
+    break;
+  case dxbc::PSV::SemanticKind::PrimitiveID:
+    if (E.SemanticIndices.front() != 0)
+      return signatureError("SV_PrimitiveID requires semantic index 0");
     break;
   default:
     break;
@@ -543,6 +553,8 @@ static dxbc::D3DSystemValue getSystemValue(dxbc::PSV::SemanticKind Kind) {
     return dxbc::D3DSystemValue::Barycentrics;
   case KindTy::SampleIndex:
     return dxbc::D3DSystemValue::SampleIndex;
+  case KindTy::PrimitiveID:
+    return dxbc::D3DSystemValue::PrimitiveID;
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }
@@ -575,6 +587,8 @@ static StringRef getContainerSemanticName(const SemanticSignatureElement &E) {
     return "SV_Barycentrics";
   case Kind::SampleIndex:
     return "SV_SampleIndex";
+  case Kind::PrimitiveID:
+    return "SV_PrimitiveID";
   default:
     llvm_unreachable("validated vertex/pixel signature semantic");
   }

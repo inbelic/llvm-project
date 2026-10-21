@@ -1352,7 +1352,8 @@ static llvm::hlsl::SemanticSignatureElement createSemanticSignatureElement(
       getSignatureComponentType(CGM, Shape.RowType);
   // These system values may be declared as int or uint, but DXIL signatures
   // require an unsigned component type.
-  if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex) {
+  if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex ||
+      Kind == llvm::dxbc::PSV::SemanticKind::PrimitiveID) {
     if (CompType == llvm::dxil::ElementType::I16)
       CompType = llvm::dxil::ElementType::U16;
     else if (CompType == llvm::dxil::ElementType::I32)
@@ -1660,6 +1661,20 @@ llvm::Value *CGHLSLRuntime::emitSystemSemanticLoad(
     if (CGM.getTarget().getTriple().isDXIL())
       return B.CreateCall(
           CGM.getIntrinsic(llvm::Intrinsic::dx_start_vertex_location));
+    break;
+  case llvm::dxbc::PSV::SemanticKind::PrimitiveID:
+    assert(Stage == llvm::Triple::Pixel &&
+           "SV_PrimitiveID is in an unavailable stage and should have been "
+           "diagnosed by Sema");
+    if (CGM.getTarget().getTriple().isSPIRV())
+      return createSPIRVBuiltinLoad(B, CGM.getModule(), Type,
+                                    Semantic->getAttrName()->getName(),
+                                    /* BuiltIn::PrimitiveId */ 7, InterpMode);
+    // Pixel shaders read the primitive ID from the input signature. The
+    // dx.op.primitiveID operation is only available to other stages.
+    if (CGM.getTarget().getTriple().isDXIL())
+      return emitDXILUserSemanticLoad(B, Type, Decl, Semantic, Index,
+                                      Signature);
     break;
   case llvm::dxbc::PSV::SemanticKind::SampleIndex:
     assert(Stage == llvm::Triple::Pixel &&

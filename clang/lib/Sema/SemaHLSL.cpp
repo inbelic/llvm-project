@@ -1008,6 +1008,7 @@ static bool isVkPipelineBuiltin(const ASTContext &AstContext, FunctionDecl *FD,
     return ST == llvm::Triple::Vertex && IsInput;
   case SemanticKind::Barycentrics:
   case SemanticKind::SampleIndex:
+  case SemanticKind::PrimitiveID:
     return ST == llvm::Triple::Pixel && IsInput;
   case SemanticKind::StartVertexLocation:
   case SemanticKind::StartInstanceLocation:
@@ -1421,6 +1422,7 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
           << /* 16 or 32 bit floating-point */ 2 << DeclaredTy;
     return;
   case SemanticKind::SampleIndex:
+  case SemanticKind::PrimitiveID:
     // SPIR-V declares these built-ins as 32-bit integers and converts 16-bit
     // declarations.
     if (DeclaredTy != T || !T->isScalarType() || !isIntUpTo32Element(Ctx, T))
@@ -2241,7 +2243,6 @@ void SemaHLSL::handleSemanticAttr(Decl *D, const ParsedAttr &AL) {
   case SemanticKind::CullDistance:
   case SemanticKind::OutputControlPointID:
   case SemanticKind::DomainLocation:
-  case SemanticKind::PrimitiveID:
   case SemanticKind::GSInstanceID:
   case SemanticKind::IsFrontFace:
   case SemanticKind::Coverage:
