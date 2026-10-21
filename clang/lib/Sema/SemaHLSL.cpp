@@ -1382,8 +1382,6 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
   QualType ElemTy = getElementTypeOf(T, /*IncludeMatrix=*/false);
   unsigned Components = getComponentCountOf(T);
 
-  bool IsSPIRV = getASTContext().getTargetInfo().getTriple().isSPIRV();
-
   switch (Kind) {
   case SemanticKind::Barycentrics:
     if (DeclaredTy != T || !isFloatOrHalfElement(ElemTy) || Components != 3)
@@ -1414,19 +1412,21 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
           << A->getAttrName() << /* scalar */ 0 << 1 << /* 32 bit integer */ 1
           << DeclaredTy;
     return;
-  case SemanticKind::VertexID:
-    if (!isIntUpTo32Element(Ctx, ElemTy) || Components != 1)
-      Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
-          << A->getAttrName() << /* scalar */ 0 << 1
-          << /* 16 or 32 bit integer */ 0 << DeclaredTy;
-    return;
   case SemanticKind::Position:
+    if (DeclaredTy != T || !T->isVectorType() ||
+        !isFloatOrHalfElement(ElemTy) || Components != 4)
+      Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
+          << A->getAttrName() << /* vector of */ 2 << 4
+          << /* 16 or 32 bit floating-point */ 2 << DeclaredTy;
+    return;
   case SemanticKind::Target:
     if (!isFloatOrHalfElement(ElemTy) || Components > 4)
       Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
           << A->getAttrName() << /* scalar or vector of up to */ 1 << 4
           << /* 16 or 32 bit floating-point */ 2 << DeclaredTy;
     return;
+  case SemanticKind::VertexID:
+  case SemanticKind::InstanceID:
   case SemanticKind::SampleIndex:
   case SemanticKind::PrimitiveID:
   case SemanticKind::StencilRef:
@@ -1438,17 +1438,6 @@ void SemaHLSL::diagnoseSemanticType(const Decl *D,
       Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
           << A->getAttrName() << /* scalar */ 0 << 1
           << /* 16 or 32 bit integer */ 0 << DeclaredTy;
-    return;
-  case SemanticKind::InstanceID:
-    // DXIL permits U32 or U16. SPIR-V requires a 32-bit scalar per
-    // VUID-InstanceIndex-InstanceIndex-04265.
-    if (!T->isUnsignedIntegerType() ||
-        !(isIntElementOfWidth(Ctx, T, 32) ||
-          (!IsSPIRV && isIntElementOfWidth(Ctx, T, 16))))
-      Diag(A->getLoc(), diag::err_hlsl_semantic_invalid_type)
-          << A->getAttrName() << /* scalar */ 0 << 1
-          << /* 16 or 32 bit unsigned integer / 32 bit unsigned integer */
-          (IsSPIRV ? 4 : 3) << DeclaredTy;
     return;
   default:
     // Other semantics only have the general signature type restrictions.

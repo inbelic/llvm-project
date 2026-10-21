@@ -1354,18 +1354,6 @@ static llvm::hlsl::SemanticSignatureElement createSemanticSignatureElement(
   llvm::dxbc::PSV::SemanticKind Kind = llvm::hlsl::getSemanticKind(Name);
   llvm::dxil::ElementType CompType =
       getSignatureComponentType(CGM, Shape.RowType);
-  // These system values may be declared as int or uint, but DXIL signatures
-  // require an unsigned component type.
-  if (Kind == llvm::dxbc::PSV::SemanticKind::SampleIndex ||
-      Kind == llvm::dxbc::PSV::SemanticKind::PrimitiveID ||
-      Kind == llvm::dxbc::PSV::SemanticKind::StencilRef ||
-      Kind == llvm::dxbc::PSV::SemanticKind::ViewPortArrayIndex ||
-      Kind == llvm::dxbc::PSV::SemanticKind::RenderTargetArrayIndex) {
-    if (CompType == llvm::dxil::ElementType::I16)
-      CompType = llvm::dxil::ElementType::U16;
-    else if (CompType == llvm::dxil::ElementType::I32)
-      CompType = llvm::dxil::ElementType::U32;
-  }
 
   // The remaining members keep their default value and will be filled at a
   // later stage, either during packing or analysis of usage. Interpolation
@@ -1905,6 +1893,19 @@ static void markArbitrarySignatureElements(
     Element.SemanticKind = llvm::dxbc::PSV::SemanticKind::Arbitrary;
 }
 
+// Integer system values may be declared as int or uint, but DXIL signatures
+// use an unsigned component type for them.
+static void makeSystemValueElementsUnsigned(
+    SmallVectorImpl<llvm::hlsl::SemanticSignatureElement> &Signature,
+    size_t FirstElement) {
+  for (auto &Element : llvm::drop_begin(Signature, FirstElement)) {
+    if (Element.CompType == llvm::dxil::ElementType::I16)
+      Element.CompType = llvm::dxil::ElementType::U16;
+    else if (Element.CompType == llvm::dxil::ElementType::I32)
+      Element.CompType = llvm::dxil::ElementType::U32;
+  }
+}
+
 llvm::Value *CGHLSLRuntime::handleScalarSemanticLoad(
     IRBuilder<> &B, const FunctionDecl *FD, llvm::Type *Type,
     const clang::DeclaratorDecl *Decl, HLSLAppliedSemanticAttr *Semantic,
@@ -1931,9 +1932,12 @@ llvm::Value *CGHLSLRuntime::handleScalarSemanticLoad(
     markArbitrarySignatureElements(Signature, FirstElement);
     return Value;
   }
-  return emitSystemSemanticLoad(B, Type, Decl, Semantic, SemanticKind,
-                                ShaderAttr->getType(), Index, Signature,
-                                InterpMode);
+  size_t FirstElement = Signature.size();
+  llvm::Value *Value = emitSystemSemanticLoad(
+      B, Type, Decl, Semantic, SemanticKind, ShaderAttr->getType(), Index,
+      Signature, InterpMode);
+  makeSystemValueElementsUnsigned(Signature, FirstElement);
+  return Value;
 }
 
 void CGHLSLRuntime::handleScalarSemanticStore(
@@ -1964,8 +1968,10 @@ void CGHLSLRuntime::handleScalarSemanticStore(
     markArbitrarySignatureElements(Signature, FirstElement);
     return;
   }
+  size_t FirstElement = Signature.size();
   emitSystemSemanticStore(B, Source, Decl, Semantic, SemanticKind,
                           ShaderAttr->getType(), Index, Signature, InterpMode);
+  makeSystemValueElementsUnsigned(Signature, FirstElement);
 }
 
 std::pair<llvm::Value *, specific_attr_iterator<HLSLAppliedSemanticAttr>>

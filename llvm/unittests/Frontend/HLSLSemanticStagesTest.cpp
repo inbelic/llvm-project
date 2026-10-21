@@ -204,6 +204,21 @@ TEST(HLSLSemanticStagesTest, RenderTargetArrayIndexFeedsTheRasterizer) {
   expectRasterizerIndex(SemanticKind::RenderTargetArrayIndex);
 }
 
+TEST(HLSLSemanticStagesTest, InstanceIDIsOnlyASystemValueVertexInput) {
+  for (Triple::EnvironmentType Stage : AllStages)
+    for (IOType IO :
+         {IOType::In, IOType::Out, IOType::PatchConstantOrPrimitive}) {
+      SemanticInterpretation Expected = SemanticInterpretation::Invalid;
+      if (Stage == Triple::Vertex && IO == IOType::In)
+        Expected = SemanticInterpretation::SV;
+      else if ((Stage == Triple::Vertex && IO == IOType::Out) ||
+               (Stage == Triple::Pixel && IO == IOType::In))
+        Expected = SemanticInterpretation::Arbitrary;
+      EXPECT_EQ(getInterpretationKind(SemanticKind::InstanceID, Stage, IO),
+                Expected);
+    }
+}
+
 TEST(HLSLSemanticStagesTest, StencilRefIsAnUnpackedPixelOutput) {
   for (Triple::EnvironmentType Stage : AllStages)
     for (IOType IO :

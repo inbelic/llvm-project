@@ -21,7 +21,7 @@ void ps_vertexid_out(out uint ID : SV_VertexID) { ID = 0; }
 // input. Validate it at the entry point rather than when declaring the field.
 struct IntegerPosition {
   int4 P : SV_Position;
-  // expected-error@-1 {{semantic 'SV_Position' must be a scalar or vector of up to 4 components of 16 or 32 bit floating-point type}}
+  // expected-error@-1 {{semantic 'SV_Position' must be a vector of 4 components of 16 or 32 bit floating-point type}}
 };
 
 [shader("vertex")]
@@ -33,7 +33,7 @@ float4 ps_position_in(IntegerPosition I) : SV_Target { return (float4)I.P; }
 // Vertex outputs are system values, so integer components remain invalid.
 [shader("vertex")]
 int4 vs_position_out(float4 P : USER) : SV_Position { return (int4)P; }
-// expected-error@-1 {{semantic 'SV_Position' must be a scalar or vector of up to 4 components of 16 or 32 bit floating-point type}}
+// expected-error@-1 {{semantic 'SV_Position' must be a vector of 4 components of 16 or 32 bit floating-point type}}
 
 // Custom semantics allow explicit indices on inputs, out parameters, and
 // return values; none should enter the system-only index checker.

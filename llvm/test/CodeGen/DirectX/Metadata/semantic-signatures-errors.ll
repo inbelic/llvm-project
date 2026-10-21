@@ -299,8 +299,8 @@ attributes #0 = { "hlsl.shader"="vertex" }
 !3 = !{i32 0}
 
 ;--- vertex-id-float.ll
-; VERTEX-ID-FLOAT: entry 'main' input signature: SV_VertexID requires a scalar 16- or 32-bit integer
-; Invalid component type (operand 2): F16, rather than a 16- or 32-bit integer.
+; VERTEX-ID-FLOAT: entry 'main' input signature: SV_VertexID requires a scalar 16- or 32-bit unsigned integer
+; Invalid component type (operand 2): F16, rather than a 16- or 32-bit unsigned integer.
 target triple = "dxil-pc-shadermodel6.8-vertex"
 define void @main() #0 { ret void }
 attributes #0 = { "hlsl.shader"="vertex" }

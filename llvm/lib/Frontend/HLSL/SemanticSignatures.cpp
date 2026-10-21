@@ -207,10 +207,19 @@ hlsl::getAvailableStages(dxbc::PSV::SemanticKind SemanticKind) {
         {Triple::Pixel, IOType::Out, SemanticInterpretation::Target}};
     return Stages;
   }
-  case dxbc::PSV::SemanticKind::VertexID:
-  case dxbc::PSV::SemanticKind::InstanceID: {
+  case dxbc::PSV::SemanticKind::VertexID: {
     static constexpr SemanticStageInfo Stages[] = {
         {Triple::Vertex, IOType::In, SemanticInterpretation::SV}};
+    return Stages;
+  }
+  case dxbc::PSV::SemanticKind::InstanceID: {
+    // Only the vertex input is a system value. The instance ID can be passed
+    // on to the pixel shader as an arbitrary semantic.
+    static constexpr SemanticStageInfo Stages[] = {
+        {Triple::Vertex, IOType::In, SemanticInterpretation::SV},
+        {Triple::Vertex, IOType::Out, SemanticInterpretation::Arbitrary},
+        {Triple::Pixel, IOType::In, SemanticInterpretation::Arbitrary},
+    };
     return Stages;
   }
   case dxbc::PSV::SemanticKind::PrimitiveID: {

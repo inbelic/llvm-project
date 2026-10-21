@@ -1,7 +1,9 @@
 // RUN: %clang_cc1 -triple dxil-pc-shadermodel6.3-pixel -finclude-default-header -x hlsl -verify -o - %s
 // RUN: %clang_cc1 -triple spirv-pc-vulkan1.3-pixel -finclude-default-header -x hlsl -verify -o - %s
 
-float4 main(uint id : SV_InstanceID) : SV_Target {
-// expected-error@-1 {{semantic 'SV_InstanceID' is not supported in pixel shader inputs}}
-  return float4(1, 1, 1, 1);
+// SV_InstanceID is an arbitrary semantic on pixel shader inputs.
+float4 main(nointerpolation int id : SV_InstanceID) : SV_Target {
+  return (float4)id;
 }
+
+// expected-no-diagnostics

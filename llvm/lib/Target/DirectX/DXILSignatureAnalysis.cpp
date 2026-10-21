@@ -79,10 +79,9 @@ static Error diagnoseSemanticType(const SemanticSignatureElement &E) {
     break;
   case dxbc::PSV::SemanticKind::VertexID:
     if (E.Rows != 1 || E.Cols != 1 ||
-        (E.CompType != ElementType::I16 && E.CompType != ElementType::U16 &&
-         E.CompType != ElementType::I32 && E.CompType != ElementType::U32))
+        (E.CompType != ElementType::U16 && E.CompType != ElementType::U32))
       return signatureError(
-          "SV_VertexID requires a scalar 16- or 32-bit integer");
+          "SV_VertexID requires a scalar 16- or 32-bit unsigned integer");
     break;
   case dxbc::PSV::SemanticKind::InstanceID:
     if (E.Rows != 1 || E.Cols != 1 ||

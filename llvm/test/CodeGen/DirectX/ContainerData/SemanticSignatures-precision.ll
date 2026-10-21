@@ -6,7 +6,7 @@
 ; RUN: cat %t/system.ll %t/signed.ll %t/native-mode.ll > %t/signed-system.ll
 ; RUN: cat %t/system.ll %t/unsigned.ll %t/native-mode.ll > %t/unsigned-system.ll
 ; RUN: cat %t/system.ll %t/unsigned.ll %t/min-mode.ll > %t/min-system.ll
-; RUN: llc -filetype=obj %t/signed-system.ll -o - | obj2yaml | FileCheck %s --check-prefixes=SYSTEM,SIGNED,NATIVE-SYSTEM
+; RUN: not llc -filetype=obj %t/signed-system.ll -o /dev/null 2>&1 | FileCheck %s --check-prefix=SIGNED
 ; RUN: llc -filetype=obj %t/unsigned-system.ll -o - | obj2yaml | FileCheck %s --check-prefixes=SYSTEM,UNSIGNED,NATIVE-SYSTEM
 ; RUN: llc -filetype=obj %t/min-system.ll -o - | obj2yaml | FileCheck %s --check-prefixes=SYSTEM,UNSIGNED,MIN-SYSTEM
 
@@ -50,8 +50,9 @@
 ; MIN-SYSTEM: MinimumPrecision: true
 ; SYSTEM: Name: ISG1
 ; SYSTEM: Name: SV_VertexID
-; SIGNED: CompType: SInt16
 ; UNSIGNED: CompType: UInt16
+; As in DXC, SV_VertexID must use an unsigned component type.
+; SIGNED: SV_VertexID requires a scalar 16- or 32-bit unsigned integer
 ; SYSTEM: Name: OSG1
 ; SYSTEM: Name: SV_Position
 ; SYSTEM: CompType: Float16
