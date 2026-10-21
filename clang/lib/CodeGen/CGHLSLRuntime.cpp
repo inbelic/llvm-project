@@ -1253,11 +1253,15 @@ void CGHLSLRuntime::emitSPIRVUserSemanticStore(
   Twine VariableName = BaseName.concat(Twine(Index.value_or(0)));
 
   unsigned Location = SPIRVLastAssignedOutputSemanticLocation;
+  // A render target is written to the location of its render-target index.
+  if (llvm::hlsl::getSemanticKind(Semantic->getAttrName()->getName()) ==
+      llvm::dxbc::PSV::SemanticKind::Target)
+    Location = Index.value_or(0);
   if (auto *L = Decl->getAttr<HLSLVkLocationAttr>())
     Location = L->getLocation();
 
-  // DXC completely ignores the semantic/index pair. Location are assigned from
-  // the first semantic to the last.
+  // Apart from render targets, DXC completely ignores the semantic/index pair.
+  // Location are assigned from the first semantic to the last.
   llvm::ArrayType *AT = dyn_cast<llvm::ArrayType>(Source->getType());
   unsigned ElementCount = AT ? AT->getNumElements() : 1;
   SPIRVLastAssignedOutputSemanticLocation += ElementCount;
@@ -1429,9 +1433,18 @@ void CGHLSLRuntime::emitDXILUserSemanticStore(llvm::IRBuilder<> &B,
   SemanticShape Shape =
       getSemanticShape(CGM.getContext(), getSemanticLeafType(Decl));
 
+  // Each render target is an independent signature element, even when a
+  // declaration groups several targets in an array. Such arrays are flattened
+  // into one single-row element per target, with consecutive semantic indices,
+  // so stores always use row 0 of their element.
+  const bool IsTarget =
+      llvm::hlsl::getSemanticKind(Semantic->getAttrName()->getName()) ==
+      llvm::dxbc::PSV::SemanticKind::Target;
+
   uint32_t SigId = Signature.size();
-  Signature.push_back(
-      createSemanticSignatureElement(CGM, SigId, Semantic, Index, Shape));
+  if (!IsTarget)
+    Signature.push_back(
+        createSemanticSignatureElement(CGM, SigId, Semantic, Index, Shape));
 
   llvm::Type *RowTy = CGM.getTypes().ConvertTypeForMem(Shape.RowType);
 
@@ -1446,6 +1459,15 @@ void CGHLSLRuntime::emitDXILUserSemanticStore(llvm::IRBuilder<> &B,
 
   const unsigned NumRows = Shape.getNumRows();
   for (unsigned Row = 0; Row < NumRows; ++Row) {
+    if (IsTarget) {
+      SigId = Signature.size();
+      llvm::hlsl::SemanticSignatureElement Element =
+          createSemanticSignatureElement(CGM, SigId, Semantic, Index, Shape);
+      Element.SemanticIndices = {Index.value_or(0) + Row};
+      Element.Rows = 1;
+      Signature.push_back(std::move(Element));
+    }
+
     SmallVector<unsigned> Indices = Shape.getArrayIndicesForRow(Row);
     llvm::Value *Val =
         Indices.empty() ? Source : B.CreateExtractValue(Source, Indices);
@@ -1459,7 +1481,7 @@ void CGHLSLRuntime::emitDXILUserSemanticStore(llvm::IRBuilder<> &B,
     }
 
     std::array<Value *, 4> Args{/*SigElementId=*/B.getInt32(SigId),
-                                /*RowIndex=*/B.getInt32(Row),
+                                /*RowIndex=*/B.getInt32(IsTarget ? 0 : Row),
                                 /*ColIndex=*/B.getInt8(0), /*Value=*/Val};
     B.CreateCall(IntrFn, Args, OB);
   }

@@ -283,6 +283,11 @@ index directly selects that row, so declaration order does not affect placement
 and rows without a corresponding semantic index remain unused. Elements that do
 not contribute to the target register space remain unallocated.
 
+A declaration with an array of render targets is flattened into one such element
+per array element, with consecutive semantic indices. `llvm.dx.store.output`
+identifies a render target by its signature element ID and always writes row 0
+of that element.
+
 For example:
 
 ```hlsl
