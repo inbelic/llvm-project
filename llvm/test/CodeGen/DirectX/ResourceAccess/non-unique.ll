@@ -1,12 +1,26 @@
-; RUN: not opt -S -dxil-resource-access -mtriple=dxil--shadermodel6.3-library %s 2>&1 | FileCheck %s
+; RUN: opt -S -dxil-resource-access -mtriple=dxil--shadermodel6.3-library %s | FileCheck %s
 
-; Test that a error message is generated for illegal resource accesses that do
-; not access a unique global resource.
+; Test that a resource access that may map to one of several global resources
+; is legalized by switching on which resource is accessed, with one access per
+; global resource.
 
-; CHECK: note: At resource access:  store i32 %7, ptr %8, align 4
-; CHECK: note: Uses resource handle:  %1 = tail call target("dx.RawBuffer", i32, 1, 0) @llvm.dx.resource.handlefrombinding.tdx.RawBuffer_i32_1_0t(i32 0, i32 1, i32 1, i32 0, ptr nonnull @.str.2)
-; CHECK: note: Uses resource handle:  %2 = tail call target("dx.RawBuffer", i32, 1, 0) @llvm.dx.resource.handlefrombinding.tdx.RawBuffer_i32_1_0t(i32 0, i32 2, i32 1, i32 0, ptr nonnull @.str.4)
-; CHECK: LLVM ERROR: Resource access is not guaranteed to map to a unique global resource
+; CHECK-LABEL: define void @main(
+; CHECK-NOT:    select i1 %loadedv.i, target(
+; CHECK:        %[[SEL:.*]] = select i1 %loadedv.i, i32 1, i32 0
+; CHECK:        %[[VAL:.*]] = extractvalue { i32, i1 }
+; CHECK:        switch i32 %[[SEL]], label %[[CASE1:.*]] [
+; CHECK-NEXT:     i32 0, label %[[CASE0:.*]]
+; CHECK-NEXT:   ]
+; CHECK:      [[CASE0]]:
+; CHECK-NEXT:   %[[H0:.*]] = tail call target("dx.RawBuffer", i32, 1, 0) @llvm.dx.resource.handlefrombinding.tdx.RawBuffer_i32_1_0t(i32 0, i32 1, i32 1, i32 0, ptr nonnull @.str.2)
+; CHECK-NEXT:   call void @llvm.dx.resource.store.rawbuffer.tdx.RawBuffer_i32_1_0t.i32(target("dx.RawBuffer", i32, 1, 0) %[[H0]], i32 %{{.*}}, i32 0, i32 %[[VAL]])
+; CHECK-NEXT:   br label %[[END:.*]]
+; CHECK:      [[CASE1]]:
+; CHECK-NEXT:   %[[H1:.*]] = tail call target("dx.RawBuffer", i32, 1, 0) @llvm.dx.resource.handlefrombinding.tdx.RawBuffer_i32_1_0t(i32 0, i32 2, i32 1, i32 0, ptr nonnull @.str.4)
+; CHECK-NEXT:   call void @llvm.dx.resource.store.rawbuffer.tdx.RawBuffer_i32_1_0t.i32(target("dx.RawBuffer", i32, 1, 0) %[[H1]], i32 %{{.*}}, i32 0, i32 %[[VAL]])
+; CHECK-NEXT:   br label %[[END]]
+; CHECK:      [[END]]:
+; CHECK-NEXT:   ret void
 
 %__cblayout_c = type <{ i32 }>
 

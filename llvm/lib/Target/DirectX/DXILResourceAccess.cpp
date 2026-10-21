@@ -18,6 +18,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -40,28 +41,6 @@
 #define DEBUG_TYPE "dxil-resource-access"
 
 using namespace llvm;
-
-[[noreturn]] static void
-diagnoseNonUniqueResourceAccess(Instruction *I,
-                                ArrayRef<IntrinsicInst *> Handles) {
-  LLVMContext &Context = I->getContext();
-  std::string InstStr;
-  raw_string_ostream InstOS(InstStr);
-  I->print(InstOS);
-  Context.diagnose(
-      DiagnosticInfoGeneric("At resource access:" + Twine(InstStr), DS_Note));
-
-  for (auto *Handle : Handles) {
-    std::string HandleStr;
-    raw_string_ostream HandleOS(HandleStr);
-    Handle->print(HandleOS);
-    Context.diagnose(DiagnosticInfoGeneric(
-        "Uses resource handle:" + Twine(HandleStr), DS_Note));
-  }
-  report_fatal_error(
-      "Resource access is not guaranteed to map to a unique global resource",
-      /*gen_crash_diag=*/false);
-}
 
 static Value *traverseGEPOffsets(const DataLayout &DL, IRBuilder<> &Builder,
                                  Value *Ptr, uint64_t AccessSize) {
@@ -1116,6 +1095,9 @@ struct AccessIndices {
   Value *GetPtrIdx;
   Value *HandleIdx;
   Value *OffsetIdx;
+  /// Selects which distinct global resource (see ResourceBindings) is
+  /// accessed. Constant when the access maps to a unique global resource.
+  Value *ResourceIdx;
 
   bool hasGetPtrIdx() { return GetPtrIdx != nullptr; }
   bool hasHandleIdx() { return HandleIdx != nullptr; }
@@ -1129,15 +1111,41 @@ struct TrackedAccessIndices {
   WeakTrackingVH GetPtrIdx;
   WeakTrackingVH HandleIdx;
   WeakTrackingVH OffsetIdx;
+  WeakTrackingVH ResourceIdx;
 
   TrackedAccessIndices() = default;
   TrackedAccessIndices(const AccessIndices &AI)
       : GetPtrIdx(AI.GetPtrIdx), HandleIdx(AI.HandleIdx),
-        OffsetIdx(AI.OffsetIdx) {}
-  operator AccessIndices() const { return {GetPtrIdx, HandleIdx, OffsetIdx}; }
+        OffsetIdx(AI.OffsetIdx), ResourceIdx(AI.ResourceIdx) {}
+  operator AccessIndices() const {
+    return {GetPtrIdx, HandleIdx, OffsetIdx, ResourceIdx};
+  }
 };
 
 using PhiAccessIndicesMap = SmallDenseMap<PHINode *, TrackedAccessIndices>;
+
+/// Assigns a stable id to each distinct global resource binding used in a
+/// function. The id is used as the ResourceIdx selector, so it must be
+/// consistent across all accesses that may share cached phi indices.
+class ResourceBindings {
+  DXILResourceTypeMap &DRTM;
+  /// Indexed by id: the binding and a representative handle to clone.
+  SmallVector<std::pair<hlsl::Binding, IntrinsicInst *>> Bindings;
+
+public:
+  ResourceBindings(DXILResourceTypeMap &DRTM) : DRTM(DRTM) {}
+
+  unsigned getID(IntrinsicInst *Handle) {
+    hlsl::Binding B = getHandleIntrinsicBinding(Handle, DRTM);
+    for (auto [Idx, Entry] : enumerate(Bindings))
+      if (Entry.first == B)
+        return Idx;
+    Bindings.emplace_back(B, Handle);
+    return Bindings.size() - 1;
+  }
+
+  IntrinsicInst *getHandle(unsigned ID) const { return Bindings[ID].second; }
+};
 } // namespace
 
 // Compute the total byte offset described by a GEP as a single i32 value,
@@ -1165,26 +1173,54 @@ static Value *accumulateGEPOffset(GetElementPtrInst *GEP,
   return Offset;
 }
 
+// Resolve a placeholder phi: fold it to its unique value if it has one,
+// otherwise insert it at the builder's position.
+static Value *finalizeIndexPhi(std::unique_ptr<PHINode> Phi,
+                               IRBuilder<> &Builder) {
+  if (Value *Constant = Phi->hasConstantValue()) {
+    Phi->replaceAllUsesWith(Constant);
+    return Constant;
+  }
+  return Builder.Insert(Phi.release());
+}
+
+// Returns the constant ResourceIdx if all handles reachable from I map to the
+// same global resource, otherwise nullptr. Used to avoid building selector phis
+// (which may be cyclic and so not trivially foldable) when none are needed.
+static Value *getUniqueResourceIdx(Instruction *I, ResourceBindings &Bindings) {
+  SmallVector<IntrinsicInst *> Handles = collectUsedHandles(I);
+  if (Handles.empty())
+    return nullptr;
+  unsigned ID = Bindings.getID(Handles[0]);
+  for (IntrinsicInst *Handle : drop_begin(Handles))
+    if (Bindings.getID(Handle) != ID)
+      return nullptr;
+  return ConstantInt::get(Type::getInt32Ty(I->getContext()), ID);
+}
+
 // getAccessIndices traverses up the control flow that a ptr came from and
 // propagates back the indicies used to access the resource (AccessIndices):
 //
 //  - GetPtrIdx is the index of dx.resource.getpointer
 //  - HandleIdx is the index of dx.resource.handlefrom.*
 //  - OffsetIdx is the accumulated byte offset of any GEPs in the ptr chain
+//  - ResourceIdx is the id of the global resource that is accessed
 static AccessIndices
 getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
-                 PhiAccessIndicesMap &VisitedPhis) {
+                 PhiAccessIndicesMap &VisitedPhis, ResourceBindings &Bindings) {
   if (auto *II = dyn_cast<IntrinsicInst>(I)) {
     if (llvm::is_contained(HandleIntrins, II->getIntrinsicID())) {
       DeadInsts.insert(II);
-      return {nullptr, II->getArgOperand(/*Index=*/3), nullptr};
+      Type *I32 = Type::getInt32Ty(II->getContext());
+      return {nullptr, II->getArgOperand(/*Index=*/3), nullptr,
+              ConstantInt::get(I32, Bindings.getID(II))};
     }
 
     Intrinsic::ID IID = II->getIntrinsicID();
     if (IID == Intrinsic::dx_resource_getpointer ||
         IID == Intrinsic::dx_resource_getbasepointer) {
       auto *V = dyn_cast<Instruction>(II->getArgOperand(/*Handle=*/0));
-      auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis);
+      auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis, Bindings);
       assert(!AccessIdx.hasGetPtrIdx() &&
              "Encountered multiple dx.resource.getpointers in ptr chain?");
       IRBuilder<> Builder(II);
@@ -1199,7 +1235,7 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
 
   if (auto *GEP = dyn_cast<GetElementPtrInst>(I)) {
     auto *V = dyn_cast<Instruction>(GEP->getPointerOperand());
-    auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis);
+    auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis, Bindings);
 
     IRBuilder<> Builder(GEP);
     Value *GEPOffset = accumulateGEPOffset(GEP, Builder);
@@ -1227,6 +1263,12 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
         PHINode::Create(Builder.getInt32Ty(), NumEdges));
     std::unique_ptr<PHINode> OffsetPhi(
         PHINode::Create(Builder.getInt32Ty(), NumEdges));
+    Value *UniqueResourceIdx = getUniqueResourceIdx(Phi, Bindings);
+    std::unique_ptr<PHINode> ResourcePhi(
+        UniqueResourceIdx ? nullptr
+                          : PHINode::Create(Builder.getInt32Ty(), NumEdges));
+    Value *ResourceIdx =
+        UniqueResourceIdx ? UniqueResourceIdx : ResourcePhi.get();
     bool HasOffset = false;
 
     // Register a ref to this phi for a recursive phi. If a placeholder phi
@@ -1234,18 +1276,20 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
     // entries that captured it.
     if (Phi->getType()->isTargetExtTy())
       VisitedPhis[Phi] = AccessIndices{/*GetPtrIdx=*/nullptr, HandlePhi.get(),
-                                       /*OffsetIdx=*/nullptr};
+                                       /*OffsetIdx=*/nullptr, ResourceIdx};
     else if (Phi->getType()->isPointerTy())
-      VisitedPhis[Phi] =
-          AccessIndices{GetPtrPhi.get(), HandlePhi.get(), OffsetPhi.get()};
+      VisitedPhis[Phi] = AccessIndices{GetPtrPhi.get(), HandlePhi.get(),
+                                       OffsetPhi.get(), ResourceIdx};
 
     for (unsigned Idx = 0; Idx < NumEdges; Idx++) {
       auto *BB = Phi->getIncomingBlock(Idx);
       auto *V = dyn_cast<Instruction>(Phi->getIncomingValue(Idx));
-      auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis);
+      auto AccessIdx = getAccessIndices(V, DeadInsts, VisitedPhis, Bindings);
       if (AccessIdx.hasGetPtrIdx())
         GetPtrPhi->addIncoming(AccessIdx.GetPtrIdx, BB);
       HandlePhi->addIncoming(AccessIdx.HandleIdx, BB);
+      if (ResourcePhi)
+        ResourcePhi->addIncoming(AccessIdx.ResourceIdx, BB);
       if (AccessIdx.hasOffsetIdx()) {
         OffsetPhi->addIncoming(AccessIdx.OffsetIdx, BB);
         HasOffset = true;
@@ -1254,39 +1298,20 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
       }
     }
 
-    Value *GetPtrIdx;
-    if (GetPtrPhi->getNumIncomingValues() == 0) {
-      GetPtrIdx = nullptr;
-    } else if (Value *ConstantGetPtr = GetPtrPhi->hasConstantValue()) {
-      GetPtrIdx = ConstantGetPtr;
-      GetPtrPhi->replaceAllUsesWith(GetPtrIdx);
-    } else {
-      GetPtrIdx = GetPtrPhi.release();
-      Builder.Insert(GetPtrIdx);
-    }
+    Value *GetPtrIdx = nullptr;
+    if (GetPtrPhi->getNumIncomingValues() != 0)
+      GetPtrIdx = finalizeIndexPhi(std::move(GetPtrPhi), Builder);
 
-    Value *HandleIdx;
-    if (Value *ConstantHandle = HandlePhi->hasConstantValue()) {
-      HandleIdx = ConstantHandle;
-      HandlePhi->replaceAllUsesWith(HandleIdx);
-    } else {
-      HandleIdx = HandlePhi.release();
-      Builder.Insert(HandleIdx);
-    }
+    Value *HandleIdx = finalizeIndexPhi(std::move(HandlePhi), Builder);
+    if (ResourcePhi)
+      ResourceIdx = finalizeIndexPhi(std::move(ResourcePhi), Builder);
 
     Value *OffsetIdx = nullptr;
-    if (HasOffset) {
-      if (Value *ConstantIdx = OffsetPhi->hasConstantValue()) {
-        OffsetIdx = ConstantIdx;
-        OffsetPhi->replaceAllUsesWith(OffsetIdx);
-      } else {
-        OffsetIdx = OffsetPhi.release();
-        Builder.Insert(OffsetIdx);
-      }
-    }
+    if (HasOffset)
+      OffsetIdx = finalizeIndexPhi(std::move(OffsetPhi), Builder);
 
     // Replace the placeholder entry with the final indices.
-    AccessIndices Result = {GetPtrIdx, HandleIdx, OffsetIdx};
+    AccessIndices Result = {GetPtrIdx, HandleIdx, OffsetIdx, ResourceIdx};
     VisitedPhis[Phi] = Result;
     DeadInsts.insert(Phi);
     return Result;
@@ -1294,23 +1319,34 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
 
   if (auto *Select = dyn_cast<SelectInst>(I)) {
     auto *TrueV = dyn_cast<Instruction>(Select->getTrueValue());
-    auto TrueAccessIdx = getAccessIndices(TrueV, DeadInsts, VisitedPhis);
+    auto TrueAccessIdx =
+        getAccessIndices(TrueV, DeadInsts, VisitedPhis, Bindings);
 
     auto *FalseV = dyn_cast<Instruction>(Select->getFalseValue());
-    auto FalseAccessIdx = getAccessIndices(FalseV, DeadInsts, VisitedPhis);
+    auto FalseAccessIdx =
+        getAccessIndices(FalseV, DeadInsts, VisitedPhis, Bindings);
 
     IRBuilder<> Builder(Select);
+    // Only select between indices that differ, reusing the original select's
+    // profile metadata.
+    auto SelectIdx = [&](Value *TrueIdx, Value *FalseIdx) -> Value * {
+      if (TrueIdx == FalseIdx)
+        return TrueIdx;
+      return Builder.CreateSelect(Select->getCondition(), TrueIdx, FalseIdx, "",
+                                  Select);
+    };
+
     Value *GetPtrSelect = nullptr;
     Value *OffsetSelect = nullptr;
 
     if (TrueAccessIdx.hasGetPtrIdx() && FalseAccessIdx.hasGetPtrIdx())
       GetPtrSelect =
-          Builder.CreateSelect(Select->getCondition(), TrueAccessIdx.GetPtrIdx,
-                               FalseAccessIdx.GetPtrIdx, "", Select);
+          SelectIdx(TrueAccessIdx.GetPtrIdx, FalseAccessIdx.GetPtrIdx);
 
-    auto *HandleSelect =
-        Builder.CreateSelect(Select->getCondition(), TrueAccessIdx.HandleIdx,
-                             FalseAccessIdx.HandleIdx, "", Select);
+    Value *HandleSelect =
+        SelectIdx(TrueAccessIdx.HandleIdx, FalseAccessIdx.HandleIdx);
+    Value *ResourceSelect =
+        SelectIdx(TrueAccessIdx.ResourceIdx, FalseAccessIdx.ResourceIdx);
 
     if (TrueAccessIdx.hasOffsetIdx() || FalseAccessIdx.hasOffsetIdx()) {
       Value *Zero = ConstantInt::get(Builder.getInt32Ty(), 0);
@@ -1318,91 +1354,214 @@ getAccessIndices(Instruction *I, SmallSetVector<Instruction *, 16> &DeadInsts,
           TrueAccessIdx.hasOffsetIdx() ? TrueAccessIdx.OffsetIdx : Zero;
       Value *FalseOffset =
           FalseAccessIdx.hasOffsetIdx() ? FalseAccessIdx.OffsetIdx : Zero;
-      OffsetSelect = Builder.CreateSelect(Select->getCondition(), TrueOffset,
-                                          FalseOffset, "", Select);
+      OffsetSelect = SelectIdx(TrueOffset, FalseOffset);
     }
 
     DeadInsts.insert(Select);
-    return {GetPtrSelect, HandleSelect, OffsetSelect};
+    return {GetPtrSelect, HandleSelect, OffsetSelect, ResourceSelect};
   }
 
   llvm_unreachable("collectUsedHandles should assure this does not occur");
 }
 
-static void
-replaceHandleWithIndices(Instruction *Ptr, IntrinsicInst *OldHandle,
-                         SmallSetVector<Instruction *, 16> &DeadInsts,
-                         PhiAccessIndicesMap &VisitedPhis) {
-  auto AccessIdx = getAccessIndices(Ptr, DeadInsts, VisitedPhis);
+// Recreate the handle of global resource ResourceID at Builder's position using
+// the propagated indices. If Root is a pointer, also recreate the pointer into
+// the resource. Returns the value that replaces Root.
+static Value *rebuildRoot(Instruction *Root, IntrinsicInst *OldHandle,
+                          AccessIndices &AccessIdx, IRBuilder<> &Builder) {
   assert(AccessIdx.hasHandleIdx() &&
          "Couldn't retrieve handle index. This is guaranteed by "
          "getAccessIndices");
 
-  IRBuilder<> Builder(Ptr);
-  if (isa<PHINode>(Ptr))
-    Builder.SetInsertPoint(Ptr->getParent()->getFirstNonPHIIt());
   IntrinsicInst *Handle = cast<IntrinsicInst>(OldHandle->clone());
   Handle->setArgOperand(/*Index=*/3, AccessIdx.HandleIdx);
   Builder.Insert(Handle);
 
-  if (Ptr->getType()->isPointerTy()) {
-    assert(AccessIdx.hasGetPtrIdx() &&
-           "Couldn't retrieve getpointer index. This is guaranteed by "
-           "getAccessIndices");
-    auto *GetPtr = Builder.CreateIntrinsic(Ptr->getType(),
-                                           Intrinsic::dx_resource_getpointer,
-                                           {Handle, AccessIdx.GetPtrIdx});
-
-    // Reapply any byte offset that came from GEPs in the original ptr chain so
-    // that later access lowering still sees it.
-    Value *Result = GetPtr;
-    if (AccessIdx.hasOffsetIdx())
-      Result = Builder.CreatePtrAdd(GetPtr, AccessIdx.OffsetIdx);
-    Ptr->replaceAllUsesWith(Result);
-  } else {
-    assert(Ptr->getType()->isTargetExtTy() && !AccessIdx.hasGetPtrIdx() &&
+  if (!Root->getType()->isPointerTy()) {
+    assert(Root->getType()->isTargetExtTy() && !AccessIdx.hasGetPtrIdx() &&
            "Unexpected resource access operand type");
-    Ptr->replaceAllUsesWith(Handle);
+    return Handle;
   }
 
-  DeadInsts.insert(Ptr);
+  assert(AccessIdx.hasGetPtrIdx() &&
+         "Couldn't retrieve getpointer index. This is guaranteed by "
+         "getAccessIndices");
+  auto *GetPtr = Builder.CreateIntrinsic(Root->getType(),
+                                         Intrinsic::dx_resource_getpointer,
+                                         {Handle, AccessIdx.GetPtrIdx});
+
+  // Reapply any byte offset that came from GEPs in the original ptr chain so
+  // that later access lowering still sees it.
+  if (AccessIdx.hasOffsetIdx())
+    return Builder.CreatePtrAdd(GetPtr, AccessIdx.OffsetIdx);
+  return GetPtr;
+}
+
+// Legalize an access whose handles all map to the same global resource by
+// recreating the handle and pointer from the propagated indices at Root.
+static void
+replaceHandleWithIndices(Instruction *Root, IntrinsicInst *OldHandle,
+                         SmallSetVector<Instruction *, 16> &DeadInsts,
+                         PhiAccessIndicesMap &VisitedPhis,
+                         ResourceBindings &Bindings) {
+  auto AccessIdx = getAccessIndices(Root, DeadInsts, VisitedPhis, Bindings);
+
+  IRBuilder<> Builder(Root);
+  if (isa<PHINode>(Root))
+    Builder.SetInsertPoint(Root->getParent()->getFirstNonPHIIt());
+  Root->replaceAllUsesWith(rebuildRoot(Root, OldHandle, AccessIdx, Builder));
+  DeadInsts.insert(Root);
+}
+
+// Legalize an access that may map to one of several global resources. The
+// access is replaced by a switch on the propagated ResourceIdx, with one case
+// per global resource that recreates the handle, the pointer (including any
+// GEPs between Root and the access) and the access itself:
+//
+//   switch i32 %resource.idx, label %case.N [ i32 0, label %case.0 ... ]
+//   case.K:
+//     %h = handlefrombinding(<binding K>, %handle.idx)
+//     %p = getpointer(%h, %getptr.idx)
+//     %v.K = load ..., ptr %p
+//     br label %resource.access.end
+//   resource.access.end:
+//     %v = phi [ %v.0, %case.0 ], ...
+//
+// No instruction is moved across control flow, so this is valid regardless of
+// where optimizations placed the access relative to the resource selection.
+static void replaceAccessWithSwitch(
+    Instruction *Access, Instruction *HandleOp, ArrayRef<unsigned> ResourceIDs,
+    SmallSetVector<Instruction *, 16> &DeadInsts,
+    PhiAccessIndicesMap &VisitedPhis, ResourceBindings &Bindings) {
+  Instruction *Root = getHandleRoot(HandleOp);
+  auto AccessIdx = getAccessIndices(Root, DeadInsts, VisitedPhis, Bindings);
+  assert(!isa<Constant>(AccessIdx.ResourceIdx) &&
+         "Expected the access to select between multiple global resources");
+
+  // GEPs between Root and the access are re-applied per case, outermost last.
+  SmallVector<GetElementPtrInst *> GEPChain;
+  for (Instruction *I = HandleOp; I != Root;) {
+    auto *GEP = cast<GetElementPtrInst>(I);
+    GEPChain.push_back(GEP);
+    I = cast<Instruction>(GEP->getPointerOperand());
+  }
+  std::reverse(GEPChain.begin(), GEPChain.end());
+
+  BasicBlock *Head = Access->getParent();
+  Function *F = Head->getParent();
+  LLVMContext &Ctx = F->getContext();
+  BasicBlock *Tail =
+      Head->splitBasicBlock(Access->getIterator(), "resource.access.end");
+  Head->getTerminator()->eraseFromParent();
+
+  // DXIL cmpxchg lowering only supports reading the original value, through
+  // extractvalue. Merge that value rather than the { original, success } pair
+  // so that each case still has a lowerable use.
+  SmallVector<ExtractValueInst *> CmpXchgExtracts;
+  if (isa<AtomicCmpXchgInst>(Access) && all_of(Access->users(), [](User *U) {
+        auto *EV = dyn_cast<ExtractValueInst>(U);
+        return EV && EV->getIndices()[0] == 0;
+      }))
+    for (User *U : Access->users())
+      CmpXchgExtracts.push_back(cast<ExtractValueInst>(U));
+
+  PHINode *Result = nullptr;
+  if (!CmpXchgExtracts.empty())
+    Result = PHINode::Create(CmpXchgExtracts[0]->getType(), ResourceIDs.size(),
+                             CmpXchgExtracts[0]->getName(), Tail->begin());
+  else if (!Access->getType()->isVoidTy())
+    Result = PHINode::Create(Access->getType(), ResourceIDs.size(),
+                             Access->getName(), Tail->begin());
+
+  // The last resource is the default destination so no unreachable block is
+  // needed.
+  SwitchInst *Switch = nullptr;
+  for (auto [Idx, ID] : enumerate(ResourceIDs)) {
+    BasicBlock *CaseBB =
+        BasicBlock::Create(Ctx, "resource.access.case", F, Tail);
+    IRBuilder<> Builder(CaseBB);
+
+    Value *Ptr = rebuildRoot(Root, Bindings.getHandle(ID), AccessIdx, Builder);
+    for (GetElementPtrInst *GEP : GEPChain) {
+      Instruction *Clone = GEP->clone();
+      Clone->setOperand(GEP->getPointerOperandIndex(), Ptr);
+      Ptr = Builder.Insert(Clone, GEP->getName());
+    }
+
+    Instruction *Clone = Access->clone();
+    Clone->replaceUsesOfWith(HandleOp, Ptr);
+    Builder.Insert(Clone, Access->getName());
+    Value *CaseResult = Clone;
+    if (!CmpXchgExtracts.empty())
+      CaseResult = Builder.CreateExtractValue(Clone, 0);
+    Builder.CreateBr(Tail);
+    if (Result)
+      Result->addIncoming(CaseResult, CaseBB);
+
+    if (Idx + 1 == ResourceIDs.size()) {
+      if (!Switch)
+        UncondBrInst::Create(CaseBB, Head);
+      else
+        Switch->setDefaultDest(CaseBB);
+      continue;
+    }
+    if (!Switch)
+      Switch = SwitchInst::Create(AccessIdx.ResourceIdx, CaseBB,
+                                  ResourceIDs.size() - 1, Head);
+    Switch->addCase(ConstantInt::get(Type::getInt32Ty(Ctx), ID), CaseBB);
+  }
+
+  for (ExtractValueInst *EV : CmpXchgExtracts) {
+    EV->replaceAllUsesWith(Result);
+    EV->eraseFromParent();
+  }
+  if (Result && CmpXchgExtracts.empty())
+    Access->replaceAllUsesWith(Result);
+  Access->eraseFromParent();
+
+  for (GetElementPtrInst *GEP : GEPChain)
+    DeadInsts.insert(GEP);
+  DeadInsts.insert(Root);
 }
 
 // Try to legalize dx.resource.handlefrom.*.binding and dx.resource.getpointer
 // calls with their respective index values and propagate the index values to
 // be used at resource access.
 //
-// If it can't be transformed to be legal then:
-//
-// Reports an error if a resource access is not guaranteed into a unique global
-// resource.
+// If an access may map to more than one global resource, the access is
+// duplicated per resource behind a switch on which resource is used.
 //
 // Returns true if any changes are made.
 static bool legalizeResourceHandles(Function &F, DXILResourceTypeMap &DRTM) {
   SmallSetVector<Instruction *, 16> DeadInsts;
   PhiAccessIndicesMap VisitedPhis;
+  ResourceBindings Bindings(DRTM);
 
-  for (BasicBlock &BB : make_early_inc_range(F)) {
-    for (Instruction &I : BB) {
-      if (auto *HandleOp = getHandleOperand(&I)) {
-        SmallVector<IntrinsicInst *> Handles = collectUsedHandles(HandleOp);
-        unsigned NumHandles = Handles.size();
-        if (NumHandles <= 1)
-          continue; // Legal, no-replacement required
+  // Collect accesses up front, as legalizing an access may split blocks.
+  SmallVector<Instruction *> Accesses;
+  for (Instruction &I : instructions(F))
+    if (getHandleOperand(&I))
+      Accesses.push_back(&I);
 
-        bool SameGlobalBinding = true;
-        hlsl::Binding B = getHandleIntrinsicBinding(Handles[0], DRTM);
-        for (unsigned Idx = 1; Idx < NumHandles; Idx++)
-          SameGlobalBinding &=
-              (B == getHandleIntrinsicBinding(Handles[Idx], DRTM));
+  for (Instruction *I : Accesses) {
+    // Re-query, as legalizing a previous access may have replaced the operand.
+    Instruction *HandleOp = getHandleOperand(I);
+    if (!HandleOp)
+      continue;
+    SmallVector<IntrinsicInst *> Handles = collectUsedHandles(HandleOp);
+    if (Handles.size() <= 1)
+      continue; // Legal, no-replacement required
 
-        if (!SameGlobalBinding)
-          diagnoseNonUniqueResourceAccess(&I, Handles);
+    SmallSetVector<unsigned, 4> ResourceIDs;
+    for (IntrinsicInst *Handle : Handles)
+      ResourceIDs.insert(Bindings.getID(Handle));
 
-        replaceHandleWithIndices(getHandleRoot(HandleOp), Handles[0], DeadInsts,
-                                 VisitedPhis);
-      }
-    }
+    if (ResourceIDs.size() == 1)
+      replaceHandleWithIndices(getHandleRoot(HandleOp), Handles[0], DeadInsts,
+                               VisitedPhis, Bindings);
+    else
+      replaceAccessWithSwitch(I, HandleOp, ResourceIDs.getArrayRef(), DeadInsts,
+                              VisitedPhis, Bindings);
   }
 
   bool MadeChanges = false;

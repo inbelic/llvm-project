@@ -17,8 +17,8 @@ void main(uint3 Tid : SV_DispatchThreadID) {
 // CHECK: %[[H0:[^ ]+]] = tail call {{.*}}handlefrombinding{{.*}}(i32 0, i32 0,
 // CHECK: %[[H1:[^ ]+]] = tail call {{.*}}handlefrombinding{{.*}}(i32 0, i32 1,
 // A.Store(Tid.x*4, 1) writes through GBuf0.
-// CHECK: %[[PA:[^ ]+]] = call ptr {{.*}}getpointer{{.*}}(target({{.*}}) %[[H0]], i32 %{{[^,)]+}})
+// CHECK: %[[PA:[^ ]+]] = tail call ptr {{.*}}getpointer{{.*}}(target({{.*}}) %[[H0]], i32 %{{[^,)]+}})
 // CHECK: store i32 1, ptr %[[PA]]
 // B.Store(Tid.x*4, 2) writes through GBuf1.
-// CHECK: %[[PB:[^ ]+]] = call ptr {{.*}}getpointer{{.*}}(target({{.*}}) %[[H1]], i32 %{{[^,)]+}})
+// CHECK: %[[PB:[^ ]+]] = tail call ptr {{.*}}getpointer{{.*}}(target({{.*}}) %[[H1]], i32 %{{[^,)]+}})
 // CHECK: store i32 2, ptr %[[PB]]
