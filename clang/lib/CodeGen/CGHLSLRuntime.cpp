@@ -1839,6 +1839,16 @@ void CGHLSLRuntime::emitSystemSemanticStore(
       "Store hasn't been implemented yet for this system semantic. FIXME");
 }
 
+// A system-value name can have an arbitrary interpretation, for example
+// SV_Position on a vertex input. Its signature elements are then arbitrary,
+// although they keep the system-value name.
+static void markArbitrarySignatureElements(
+    SmallVectorImpl<llvm::hlsl::SemanticSignatureElement> &Signature,
+    size_t FirstElement) {
+  for (auto &Element : llvm::drop_begin(Signature, FirstElement))
+    Element.SemanticKind = llvm::dxbc::PSV::SemanticKind::Arbitrary;
+}
+
 llvm::Value *CGHLSLRuntime::handleScalarSemanticLoad(
     IRBuilder<> &B, const FunctionDecl *FD, llvm::Type *Type,
     const clang::DeclaratorDecl *Decl, HLSLAppliedSemanticAttr *Semantic,
@@ -1858,9 +1868,13 @@ llvm::Value *CGHLSLRuntime::handleScalarSemanticLoad(
   if (CGM.getTarget().getTriple().isSPIRV())
     InterpMode = getSPIRVInterpolationMode(
         InterpMode, Type, ShaderAttr->getType(), llvm::hlsl::IOType::In);
-  if (Interpretation == llvm::hlsl::SemanticInterpretation::Arbitrary)
-    return emitUserSemanticLoad(B, Type, Decl, Semantic, Index, Signature,
-                                InterpMode);
+  if (Interpretation == llvm::hlsl::SemanticInterpretation::Arbitrary) {
+    size_t FirstElement = Signature.size();
+    llvm::Value *Value = emitUserSemanticLoad(B, Type, Decl, Semantic, Index,
+                                              Signature, InterpMode);
+    markArbitrarySignatureElements(Signature, FirstElement);
+    return Value;
+  }
   return emitSystemSemanticLoad(B, Type, Decl, Semantic, SemanticKind,
                                 ShaderAttr->getType(), Index, Signature,
                                 InterpMode);
@@ -1887,9 +1901,13 @@ void CGHLSLRuntime::handleScalarSemanticStore(
                                            ShaderAttr->getType(),
                                            llvm::hlsl::IOType::Out);
 
-  if (Interpretation == llvm::hlsl::SemanticInterpretation::Arbitrary)
-    return emitUserSemanticStore(B, Source, Decl, Semantic, Index, Signature,
-                                 InterpMode);
+  if (Interpretation == llvm::hlsl::SemanticInterpretation::Arbitrary) {
+    size_t FirstElement = Signature.size();
+    emitUserSemanticStore(B, Source, Decl, Semantic, Index, Signature,
+                          InterpMode);
+    markArbitrarySignatureElements(Signature, FirstElement);
+    return;
+  }
   emitSystemSemanticStore(B, Source, Decl, Semantic, SemanticKind,
                           ShaderAttr->getType(), Index, Signature, InterpMode);
 }
